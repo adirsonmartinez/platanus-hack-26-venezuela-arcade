@@ -123,6 +123,8 @@ let tBoard, tHint, tEnt; // textos de tabla, indicaciones e iniciales
 let boss; // jefe activo o null (ver sección Jefes)
 let tBan, tBanS, banT = 0; // aviso grande en pantalla (nivel nuevo o jefe) y su tiempo restante
 let tBoss; // nombre del jefe sobre su barra de vida
+let items, itT; // objetos sueltos por el mapa {x, y, k (tipo), t (vida)} y espera hasta el próximo
+let tCombo, tPop; // texto del combo y aviso flotante al tomar un objeto
 let tMenu; // textos de la pantalla de inicio
 const NAME = 'NEÓN GRID'; // nombre provisional del juego
 const BOARD_KEY = 'neongrid.scores';
@@ -187,7 +189,7 @@ function create() {
     gP.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.4, 4);
   }
   sc = this;
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0 };
+  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0 };
   createHud(this);
   createMenu(this);
   try {
@@ -221,6 +223,8 @@ function create() {
   eshots = [];
   bits = [];
   orbs = [];
+  items = [];
+  itT = 15;
   cx = cy = 0;
   // z: cuánto se mueven con la cámara (más bajo = más lejos y más tenue)
   stars = [];
@@ -261,6 +265,9 @@ function update(_, dt) {
   }
   st.inv -= s;
   banT -= s;
+  st.mg -= s;
+  // El combo se corta si pasan unos segundos sin destruir nada.
+  if ((st.ct -= s) <= 0) st.cb = 0;
   // Tras vencer al jefe, la tienda se abre cuando termina la explosión.
   if (st.sw > 0 && (st.sw -= s) <= 0) openShop();
   st.hf -= s;
@@ -335,6 +342,7 @@ function update(_, dt) {
   updateSnakes(s);
   updateBoss(s);
   updateOrbs(s);
+  updateItems(s);
 
   // La cámara solo sigue al jugador cuando sale de la zona muerta, y lo hace suave.
   const tx = pl.x - Phaser.Math.Clamp(pl.x - cx, -DZX, DZX);
@@ -368,6 +376,7 @@ function update(_, dt) {
   for (const e of blasts) if (e.t < 0.3) light(e.x, e.y, e.r * 2.2, 1, e.k);
   for (const b of eshots) light(b.x, b.y, 60, 0.4, b.c);
   if (boss) bossLight();
+  for (const o of items) light(o.x, o.y, 90, 0.6, IC[o.k]);
   for (const o of orbs) light(o.x, o.y, 50, 0.3, OB);
 
   drawStars();
@@ -631,7 +640,7 @@ function killDia(e) {
   drop(e.x, e.y, 1);
   // Bonus por destruir la oleada completa.
   if (++e.w.k == e.w.n) {
-    st.pts += 200;
+    st.pts += 200 * cm();
     sfx.lvl();
   }
 }
@@ -825,7 +834,8 @@ function updateOrbs(s) {
     if (o.v && (o.l -= s) <= 0) o.got = true;
     const dx = pl.x - o.x, dy = pl.y - o.y, d = Math.hypot(dx, dy);
     // Cerca del jugador vuelan hacia él (imán).
-    if (d < MAG && !st.dead) {
+    // Con el imán activo, todos los puntos cercanos vuelan hacia ti.
+    if (d < (st.mg > 0 ? 900 : MAG) && !st.dead) {
       o.vx += (dx / d) * 1400 * s;
       o.vy += (dy / d) * 1400 * s;
     }
@@ -835,7 +845,7 @@ function updateOrbs(s) {
     o.y += o.vy * s;
     if (d < pl.r + 6 && !st.dead) {
       o.got = true;
-      st.pts += 10;
+      st.pts += 10 * cm();
       sfx.orb();
     }
   }
@@ -844,6 +854,7 @@ function updateOrbs(s) {
 
 // Suelta n puntos que salen disparados desde (x, y); v marca que vienen de un enemigo.
 function drop(x, y, n) {
+  if (Math.random() < 0.035) spawnItem(x, y);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.28, v = 80 + Math.random() * 120;
     orbs.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, p: 0, v: 1, l: OL + Math.random() });
@@ -854,6 +865,7 @@ function drop(x, y, n) {
 // rellena y quedas invulnerable un momento (parpadea). El daño sobrante se descarta.
 function hurt(d) {
   if (st.inv > 0 || st.dead || pl.dt > 0) return;
+  st.cb = 0; // recibir daño corta el combo
   st.sh -= d;
   st.rg = 2;
   st.hf = 0.15;
@@ -879,7 +891,7 @@ function hurt(d) {
 
 // Nueva partida en el mismo lugar del mundo, sin enemigos cerca.
 function restart() {
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0 };
+  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0 };
   foes = [];
   jets = [];
   spins = [];
@@ -896,6 +908,8 @@ function restart() {
   eshots = [];
   boss = null;
   banT = 0;
+  items = [];
+  itT = 15;
   for (const t of [tOver, tBan, tBanS, tBoss]) t.setVisible(false);
   shop = null;
   hideShop();
@@ -1138,6 +1152,7 @@ function drawFoes() {
     }
   }
   drawBoss();
+  drawItems();
   for (const b of eshots) {
     gE.fillStyle(b.c, 0.25);
     gE.fillCircle(b.x, b.y, 7);
@@ -1270,6 +1285,7 @@ function drawShip() {
 
 // ---------- HUD holográfico ----------
 const HB = 0x2a8cff, HC = 0x5fd8ff; // azul base, cian brillante
+const cm = () => Math.min(8, 1 + ((st.cb / 5) | 0)); // multiplicador de puntos del combo
 const need = () => Math.round(150 * st.lvl ** 1.5); // XP para el siguiente nivel: 150, 424, 779, 1200...
 
 // Suma XP y créditos por enemigo destruido; sube de nivel al llenar la barra.
@@ -1278,6 +1294,12 @@ function reward(xp, cr) {
   // El nivel sube al vencerlo.
   st.xp = Math.min(need(), st.xp + xp);
   st.cr += cr;
+  // Combo: cada destrucción dentro de 2.5 s lo alarga; cada 5 sube el multiplicador (hasta x8).
+  const m0 = cm();
+  st.cb++;
+  st.ct = 2.5;
+  if (cm() > m0) tone(500 + cm() * 120, 900 + cm() * 160, 0.15, 'square', 0.05);
+  st.pts += xp * cm();
   if (st.xp >= need() && !boss && !shop && st.sw <= 0 && !st.dead) openShop(1);
 }
 
@@ -1290,7 +1312,10 @@ function createHud(scene) {
   tTime = txt(W / 2, 30, 32, 0.5);
   tScore = txt(W / 2, 62, 16, 0.5);
   tCr = txt(712, 70, 13, 1);
-  tBoss = txt(W / 2, 88, 12, 0.5).setVisible(false);
+  tBoss = txt(W / 2, 112, 12, 0.5).setVisible(false);
+  tCombo = txt(W / 2, 84, 14, 0.5);
+  tPop = scene.add.text(0, 0, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: 16, color: '#f2fbff' })
+    .setOrigin(0.5).setDepth(8).setShadow(0, 0, '#5fd8ff', 8, true, true).setVisible(false);
   const big = (y, size) => scene.add.text(W / 2, y, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: size, color: '#f2fbff' })
     .setOrigin(0.5).setScrollFactor(0).setDepth(9).setVisible(false);
   tBan = big(200, 56);
@@ -1392,6 +1417,14 @@ function drawHud() {
   tCr.setText('CRÉDITOS ' + st.cr);
 
   drawBossHud();
+  // Combo bajo el puntaje: multiplicador y una barra que se vacía hasta que se corta.
+  tCombo.setVisible(st.cb > 1 && !menu);
+  if (st.cb > 1) {
+    const m = cm();
+    tCombo.setText('COMBO ' + st.cb + (m > 1 ? '   x' + m : '')).setColor(m > 1 ? '#ffb02e' : '#bfe9ff');
+    gH.fillStyle(m > 1 ? ORA : HC, 0.85);
+    gH.fillRect(W / 2 - 50, 94, 100 * Math.max(0, st.ct / 2.5), 2);
+  }
 
   // Abajo a la izquierda: powerups que tienes, en hexágonos con su nivel en 4 marcas.
   // El recién comprado destella en magenta un momento.
@@ -1726,7 +1759,7 @@ function toMenu() {
   menu = 1;
   mT = 0;
   for (const k in tMenu) tMenu[k].setVisible(true);
-  for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt]) t.setVisible(false);
+  for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt, tCombo, tPop]) t.setVisible(false);
   gShop.clear();
 }
 
@@ -2133,6 +2166,7 @@ function bossDown() {
   st.pts += 1000 * (st.bn + 1);
   st.cr += 15 + 5 * st.bn;
   drop(B.x, B.y, 14);
+  spawnItem(B.x, B.y);
   st.bn++;
   boss = null;
   st.xp = 0;
@@ -2192,9 +2226,9 @@ function drawBossHud() {
   if (B) {
     tBoss.setText(BN[B.k]);
     gH.fillStyle(HB, 0.3);
-    gH.fillRect(250, 98, 300, 6);
+    gH.fillRect(250, 122, 300, 6);
     gH.fillStyle(B.hf > 0 ? 0xffffff : BC[B.k], 0.95);
-    gH.fillRect(250, 98, 300 * Math.max(0, B.hp / B.mx), 6);
+    gH.fillRect(250, 122, 300 * Math.max(0, B.hp / B.mx), 6);
     const sx = B.x - cx + W / 2, sy = B.y - cy + H / 2;
     if (sx < 0 || sx > W || sy < 0 || sy > H) {
       const a = Math.atan2(sy - H / 2, sx - W / 2), x = Phaser.Math.Clamp(sx, 30, W - 30), y = Phaser.Math.Clamp(sy, 120, H - 30);
@@ -2210,5 +2244,86 @@ function drawBossHud() {
     const al = Math.min(1, banT * 2), g = Math.random() < 0.08 ? (Math.random() - 0.5) * 14 : 0;
     tBan.setAlpha(al).setScale(1 + Math.max(0, banT - 2.3) * 2).setX(W / 2 + g);
     tBanS.setAlpha(al);
+  }
+}
+
+// ---------- Objetos del mapa ----------
+// Aparecen cada 15–25 s cerca del jugador y a veces los suelta un enemigo destruido (el jefe
+// siempre suelta uno). Duran 12 s y parpadean los últimos 3.
+// 0 VIDA (+1 corazón), 1 ESCUDO (barra llena), 2 BOMBA (destruye lo cercano), 3 IMÁN (8 s).
+const IN = ['+1 VIDA', 'ESCUDO', '¡BOMBA!', 'IMÁN'];
+const IC = [0xff4f7a, HC, YEL, OB];
+
+function spawnItem(x, y) {
+  items.push({ x, y, k: (Math.random() * 4) | 0, t: 12, a: 0 });
+}
+
+function updateItems(s) {
+  if (!boss && !st.dead && (itT -= s) <= 0) {
+    itT = 15 + Math.random() * 10;
+    const a = Math.random() * 6.28, d = 250 + Math.random() * 200;
+    spawnItem(pl.x + Math.cos(a) * d, pl.y + Math.sin(a) * d);
+  }
+  for (const o of items) {
+    o.t -= s;
+    o.a += s * 2;
+    if (!st.dead && Math.hypot(o.x - pl.x, o.y - pl.y) < pl.r + 18) {
+      o.t = 0;
+      takeItem(o);
+    }
+  }
+  items = items.filter((o) => o.t > 0);
+  if (tPop.visible && (tPop.t -= s) <= 0) tPop.setVisible(false);
+  if (tPop.visible) tPop.setPosition(pl.x, pl.y - 40 - (1 - tPop.t) * 30).setAlpha(Math.min(1, tPop.t * 2));
+}
+
+function takeItem(o) {
+  if (o.k == 0) st.hp = Math.min(5, st.hp + 1);
+  else if (o.k == 1) st.sh = 1;
+  else if (o.k == 3) st.mg = 8;
+  else {
+    // Bomba: onda enorme que destruye todo lo cercano y los proyectiles enemigos. Da un
+    // segundo de invulnerabilidad para que las explosiones en cadena no te alcancen.
+    st.inv = 1;
+    boom(pl.x, pl.y, 340, 0xffffff, YEL);
+    targets();
+    for (const t of tg) {
+      if (Math.hypot(t.e.x - pl.x, t.e.y - pl.y) > 340) continue;
+      if (t.k == 6) hitBoss(10);
+      else for (let i = 0; i < 5 && !t.e.dead; i++) hitEnemy(t.e, t.k);
+    }
+    eshots = [];
+  }
+  sfx.buy();
+  tPop.setText(IN[o.k]).setShadow(0, 0, '#' + IC[o.k].toString(16).padStart(6, '0'), 10, true, true).setVisible(true);
+  tPop.t = 1;
+}
+
+function drawItems() {
+  for (const o of items) {
+    if (o.t < 3 && Math.sin(o.t * 18) < 0) continue;
+    const c = IC[o.k], k = 1 + Math.sin(o.a * 2) * 0.08;
+    // Marco: rombo que gira, con el símbolo del objeto adentro.
+    const fr = [0, 1, 2, 3].map((i) => ({ x: o.x + Math.cos(o.a + i * 1.571) * 20 * k, y: o.y + Math.sin(o.a + i * 1.571) * 20 * k }));
+    gE.fillStyle(c, 0.15);
+    gE.fillPoints(fr, true);
+    for (const [w, al] of [[8, 0.15], [3, 0.4], [1.5, 1]]) {
+      gE.lineStyle(w, w > 2 ? c : 0xffffff, al);
+      gE.strokePoints(fr, true);
+    }
+    gE.fillStyle(c, 1);
+    gE.lineStyle(2, 0xffffff, 1);
+    if (o.k == 0) gE.fillPoints(heart(o.x, o.y + 1, 0.42), true);
+    else if (o.k == 1) gE.strokePoints(hexPts(o.x, o.y, 8, 0), true);
+    else if (o.k == 2) {
+      gE.fillCircle(o.x, o.y + 2, 6);
+      gE.lineBetween(o.x + 3, o.y - 3, o.x + 7, o.y - 8);
+    } else {
+      gE.beginPath();
+      gE.arc(o.x, o.y - 2, 6, 0, Math.PI);
+      gE.strokePath();
+      gE.lineBetween(o.x - 6, o.y - 2, o.x - 6, o.y - 7);
+      gE.lineBetween(o.x + 6, o.y - 2, o.x + 6, o.y - 7);
+    }
   }
 }
