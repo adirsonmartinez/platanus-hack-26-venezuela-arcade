@@ -90,7 +90,7 @@ const DZX = 90, DZY = 60; // zona muerta de la cámara, desde el centro
 // Estado de la escena
 let gS, gG, gE, gP; // gráficos: estrellas, grilla, enemigos/explosiones, jugador
 let sc; // escena
-let lv; // luz por vértice de la grilla, en coordenadas de mundo ("c,r" → [r, g, b], cada uno 0..1)
+let lv; // luz por vértice de la grilla, en coordenadas de mundo (clave gk(c, r) → [r, g, b], cada uno 0..1)
 let pl; // jugador (coordenadas de mundo, sin límites)
 let cx, cy; // centro de la cámara en el mundo
 let stars; // partículas de fondo con parallax
@@ -1181,7 +1181,7 @@ function light(x, y, R, m, c = 0xffffff, flat) {
     for (let c = c0; c <= c1; c++) {
       const d = hypot(c * CS - x, r * CS - y) / R;
       if (d >= 1) continue;
-      const f = flat ? m : (1 - d) * (1 - d) * m, key = c + ',' + r;
+      const f = flat ? m : (1 - d) * (1 - d) * m, key = gk(c, r);
       const v = lv.get(key) || [0, 0, 0];
       for (let i = 0; i < 3; i++) v[i] = max(v[i], f * k[i]);
       lv.set(key, v);
@@ -1189,9 +1189,12 @@ function light(x, y, R, m, c = 0xffffff, flat) {
   }
 }
 
+// Clave numérica de cada vértice (columna, fila): evita armar miles de textos por cuadro.
+// Es única mientras la fila esté entre ±50 000 (2 millones de píxeles).
+const gk = (c, r) => c * 1e5 + r;
 const Z = [0, 0, 0];
 function L(c, r) {
-  return lv.get(c + ',' + r) || Z;
+  return lv.get(gk(c, r)) || Z;
 }
 
 // Estrellas en pantalla, desplazadas por la cámara según su profundidad y repetidas en bucle.
@@ -1206,9 +1209,12 @@ function drawStars() {
 }
 
 // Segmento entre dos vértices con luz a y b: toma el color promedio y su brillo.
+// Los segmentos apagados se guardan en dk (gruesos o finos) para dibujarlos todos juntos.
+let dk;
 function seg(x1, y1, x2, y2, a, b, maj) {
   const r = (a[0] + b[0]) / 2, g = (a[1] + b[1]) / 2, bl = (a[2] + b[2]) / 2;
   const v = max(r, g, bl);
+  if (!v) return dk[maj ? 0 : 1].push(x1, y1, x2, y2);
   const al = DARK + v * (maj ? 0.85 : 0.45);
   const c = v ? ((255 * r / v) << 16) | ((255 * g / v) << 8) | (255 * bl / v) : 0xffffff;
   if (v > 0.05) {
@@ -1222,6 +1228,7 @@ function seg(x1, y1, x2, y2, a, b, maj) {
 // Solo se dibujan las líneas visibles; la grilla se repite sin fin.
 function drawGrid() {
   gG.clear();
+  dk = [[], []];
   const c0 = floor((cx - W / 2) / CS), c1 = ceil((cx + W / 2) / CS);
   const r0 = floor((cy - H / 2) / CS), r1 = ceil((cy + H / 2) / CS);
   for (let r = r0; r <= r1; r++) {
@@ -1231,6 +1238,16 @@ function drawGrid() {
       if (r < r1) seg(x, y, x, y + CS, v, L(c, r + 1), !(c & 1));
     }
   }
+  // Todas las líneas apagadas en dos trazos (gruesas y finas) en vez de una por segmento.
+  dk.forEach((p, i) => {
+    gG.lineStyle(2 - i, 0xffffff, DARK);
+    gG.beginPath();
+    for (let j = 0; j < p.length; j += 4) {
+      gG.moveTo(p[j], p[j + 1]);
+      gG.lineTo(p[j + 2], p[j + 3]);
+    }
+    gG.strokePath();
+  });
 }
 
 function hexPts(x, y, r, a) {
