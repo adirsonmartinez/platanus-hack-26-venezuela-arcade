@@ -120,6 +120,9 @@ let ent; // ingreso de iniciales: {l (índice de cada letra), i (letra elegida)}
 let hl = -1; // fila de la tabla recién agregada, para resaltarla
 let pause = 0;
 let tBoard, tHint, tEnt; // textos de tabla, indicaciones e iniciales
+let boss; // jefe activo o null (ver sección Jefes)
+let tBan, tBanS, banT = 0; // aviso grande en pantalla (nivel nuevo o jefe) y su tiempo restante
+let tBoss; // nombre del jefe sobre su barra de vida
 let tMenu; // textos de la pantalla de inicio
 const NAME = 'NEÓN GRID'; // nombre provisional del juego
 const BOARD_KEY = 'neongrid.scores';
@@ -184,7 +187,7 @@ function create() {
     gP.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.4, 4);
   }
   sc = this;
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0] };
+  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0 };
   createHud(this);
   createMenu(this);
   try {
@@ -257,6 +260,9 @@ function update(_, dt) {
     return;
   }
   st.inv -= s;
+  banT -= s;
+  // Tras vencer al jefe, la tienda se abre cuando termina la explosión.
+  if (st.sw > 0 && (st.sw -= s) <= 0) openShop();
   st.hf -= s;
   if (st.pf) st.pf[1] -= s;
   // La barra de escudo se regenera sola tras 2 segundos sin recibir daño.
@@ -327,6 +333,7 @@ function update(_, dt) {
   updateWaves(s);
   updateMines(s);
   updateSnakes(s);
+  updateBoss(s);
   updateOrbs(s);
 
   // La cámara solo sigue al jugador cuando sale de la zona muerta, y lo hace suave.
@@ -360,6 +367,7 @@ function update(_, dt) {
   for (const e of mines) light(e.x, e.y, MR, 0.25 + 0.6 * Math.min(1, e.t / FUSE), MC, 1);
   for (const e of blasts) if (e.t < 0.3) light(e.x, e.y, e.r * 2.2, 1, e.k);
   for (const b of eshots) light(b.x, b.y, 60, 0.4, b.c);
+  if (boss) bossLight();
   for (const o of orbs) light(o.x, o.y, 50, 0.3, OB);
 
   drawStars();
@@ -375,7 +383,7 @@ function updateFoes(s) {
   // Mantener FN enemigos cerca: aparecen fuera de pantalla y desaparecen si quedan muy lejos.
   foes = foes.filter((e) => Math.hypot(e.x - pl.x, e.y - pl.y) < 1300);
   let n = foes.filter((e) => !e.g).length;
-  for (; n < FN + dif(); n++) {
+  for (; !boss && n < FN + dif(); n++) {
     const a = Math.random() * 6.28, d = 520 + Math.random() * 500;
     const m = Math.random() * 6.28, v = (15 + Math.random() * 30) * spd();
     foes.push({
@@ -385,7 +393,7 @@ function updateFoes(s) {
     });
   }
   // Desde el nivel 2 llegan formaciones que viajan juntas, cada vez más seguidas y grandes.
-  if (st.lvl > 1 && !st.dead && (ft -= s) <= 0) {
+  if (st.lvl > 1 && !boss && !st.dead && (ft -= s) <= 0) {
     ft = Math.max(5, 14 - dif()) + Math.random() * 3;
     formation();
   }
@@ -469,7 +477,7 @@ function formation() {
 function updateJets(s) {
   jets = jets.filter((j) => !j.dead && Math.hypot(j.x - pl.x, j.y - pl.y) < 1400);
   JT.forEach((T, t) => {
-    while (jets.filter((j) => j.t == t).length < T.n + ((dif() / (3 + t)) | 0)) {
+    while (!boss && jets.filter((j) => j.t == t).length < T.n + ((dif() / (3 + t)) | 0)) {
       const a = Math.random() * 6.28, d = 650 + Math.random() * 400;
       jets.push({ t, x: pl.x + Math.cos(a) * d, y: pl.y + Math.sin(a) * d, a: a + Math.PI, m: a + Math.PI, cd: 1 + Math.random() * 2, hp: T.hp, hf: 0 });
     }
@@ -547,7 +555,7 @@ function boom(x, y, r, c, k, dmg) {
 
 function updateSpins(s) {
   spins = spins.filter((e) => !e.dead && Math.hypot(e.x - pl.x, e.y - pl.y) < 1400);
-  while (spins.length < SN + (dif() >> 2)) {
+  while (!boss && spins.length < SN + (dif() >> 2)) {
     const a = Math.random() * 6.28, d = 600 + Math.random() * 500;
     spins.push({ x: pl.x + Math.cos(a) * d, y: pl.y + Math.sin(a) * d, a: 0, m: Math.random() * 6.28, hp: 4, hf: 0, hc: 0 });
   }
@@ -647,11 +655,12 @@ function blastHit(x, y, r) {
     }
   }
   for (const e of mines) if (near(e)) e.t = Math.max(e.t, FUSE - 0.15);
+  if (boss && Math.hypot(boss.x - x, boss.y - y) < r + 40) hitBoss(6);
 }
 
 function updateSnakes(s) {
   snakes = snakes.filter((k) => k.s.length && Math.hypot(k.s[0].x - pl.x, k.s[0].y - pl.y) < 1500);
-  while (snakes.length < SNN + (dif() >> 2)) {
+  while (!boss && snakes.length < SNN + (dif() >> 2)) {
     const a = Math.random() * 6.28, d = 700 + Math.random() * 300, n = 4 + ((Math.random() * (9 + dif())) | 0);
     const x = pl.x + Math.cos(a) * d, y = pl.y + Math.sin(a) * d, seg = [];
     for (let i = 0; i < n; i++) seg.push({ x: x + Math.cos(a) * i * SGAP, y: y + Math.sin(a) * i * SGAP, a: 0, hf: 0 });
@@ -712,7 +721,7 @@ function updateSnakes(s) {
 }
 
 function updateMines(s) {
-  if (!st.dead && (mt -= s) <= 0) {
+  if (!boss && !st.dead && (mt -= s) <= 0) {
     mt = (7 + Math.random() * 6) / (1 + dif() * 0.1);
     // Aparece a una distancia que deja al jugador dentro del área: hay que salir corriendo.
     // Desde el nivel 5 a veces llegan tres en triángulo y hay que escapar por un hueco.
@@ -751,7 +760,7 @@ function updateMines(s) {
 }
 
 function updateWaves(s) {
-  if (!st.dead && (wt -= s) <= 0) {
+  if (!boss && !st.dead && (wt -= s) <= 0) {
     wt = (25 + Math.random() * 10) / (1 + dif() * 0.08);
     // 0: columnas (vertical), 1: filas (horizontal), 2: combinada (cruz).
     const mode = (Math.random() * 3) | 0;
@@ -870,7 +879,7 @@ function hurt(d) {
 
 // Nueva partida en el mismo lugar del mundo, sin enemigos cerca.
 function restart() {
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0] };
+  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0 };
   foes = [];
   jets = [];
   spins = [];
@@ -885,7 +894,9 @@ function restart() {
   lanes = [];
   wt = 15;
   eshots = [];
-  tOver.setVisible(false);
+  boss = null;
+  banT = 0;
+  for (const t of [tOver, tBan, tBanS, tBoss]) t.setVisible(false);
   shop = null;
   hideShop();
 }
@@ -1126,6 +1137,7 @@ function drawFoes() {
       if (j.t) gE.strokeCircle(j.x, j.y, 7);
     }
   }
+  drawBoss();
   for (const b of eshots) {
     gE.fillStyle(b.c, 0.25);
     gE.fillCircle(b.x, b.y, 7);
@@ -1262,14 +1274,11 @@ const need = () => Math.round(150 * st.lvl ** 1.5); // XP para el siguiente nive
 
 // Suma XP y créditos por enemigo destruido; sube de nivel al llenar la barra.
 function reward(xp, cr) {
-  st.xp += xp;
+  // La barra se llena hasta el tope: eliges un powerup gratis y aparece el jefe.
+  // El nivel sube al vencerlo.
+  st.xp = Math.min(need(), st.xp + xp);
   st.cr += cr;
-  if (st.xp >= need()) {
-    st.xp -= need();
-    st.lvl++;
-    sfx.lvl();
-    openShop();
-  }
+  if (st.xp >= need() && !boss && !shop && st.sw <= 0 && !st.dead) openShop(1);
 }
 
 function createHud(scene) {
@@ -1281,6 +1290,11 @@ function createHud(scene) {
   tTime = txt(W / 2, 30, 32, 0.5);
   tScore = txt(W / 2, 62, 16, 0.5);
   tCr = txt(712, 70, 13, 1);
+  tBoss = txt(W / 2, 88, 12, 0.5).setVisible(false);
+  const big = (y, size) => scene.add.text(W / 2, y, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: size, color: '#f2fbff' })
+    .setOrigin(0.5).setScrollFactor(0).setDepth(9).setVisible(false);
+  tBan = big(200, 56);
+  tBanS = big(258, 18);
   // Tienda: fondo, encabezado y 3 cartas (nombre, nivel, descripción, precio).
   gShop = scene.add.graphics().setScrollFactor(0).setDepth(10);
   const st2 = (x, y, size, col, wrap) =>
@@ -1377,6 +1391,8 @@ function drawHud() {
   gH.fillRect(598, 56, 118 * Math.max(0, st.sh), 4);
   tCr.setText('CRÉDITOS ' + st.cr);
 
+  drawBossHud();
+
   // Abajo a la izquierda: powerups que tienes, en hexágonos con su nivel en 4 marcas.
   // El recién comprado destella en magenta un momento.
   const own = [0, 1, 2, 3, 4].filter((i) => st.pw[i]);
@@ -1439,12 +1455,14 @@ function targets() {
   for (const e of dias) tg.push({ e, k: 3 });
   for (const e of mines) tg.push({ e, k: 4 });
   for (const k of snakes) for (const e of k.s) tg.push({ e, k: 5 });
+  if (boss && !boss.d) tg.push({ e: boss, k: 6 });
 }
 
 // Un golpe a un enemigo de tipo k, igual que un disparo.
 function hitEnemy(e, k) {
   if (e.dead) return;
-  if (k == 0) killFoe(e);
+  if (k == 6) hitBoss(1);
+  else if (k == 0) killFoe(e);
   else if (k == 3) killDia(e);
   else if (k == 5) killSeg(e);
   else {
@@ -1565,13 +1583,15 @@ function drawPowers() {
 }
 
 // ---------- Tienda ----------
-function openShop() {
+// f: tienda gratis antes del jefe (eliges 1 powerup sin pagar); al cerrarla aparece el jefe.
+function openShop(f) {
   if (st.dead) return;
   const av = [0, 1, 2, 3, 4].filter((i) => st.pw[i] < 4);
-  if (!av.length) return;
+  if (!av.length) return f && spawnBoss();
   Phaser.Utils.Array.Shuffle(av);
-  shop = { c: av.slice(0, 3), s: 0, t: 0 };
+  shop = { c: av.slice(0, 3), s: 0, t: 0, f };
 }
+const cost = (i) => (shop.f ? 0 : price(i));
 
 function updateShop(s) {
   shop.t += s;
@@ -1581,14 +1601,16 @@ function updateShop(s) {
   // Medio segundo de gracia para no comprar sin querer mientras disparabas.
   if (shop.t > 0.5) {
     const i = shop.c[shop.s];
-    if (pressed.P1_1 && st.cr >= price(i)) {
-      st.cr -= price(i);
+    const f = shop.f;
+    if (pressed.P1_1 && st.cr >= cost(i)) {
+      st.cr -= cost(i);
       st.pw[i]++;
       st.pf = [i, 1.5]; // destello en el HUD del powerup recién comprado
       pwt[i] = 0.5;
       sfx.buy();
       shop = null;
     } else if (pressed.P1_2) shop = null;
+    if (!shop && f) spawnBoss();
   }
   if (shop) drawShop();
   else hideShop();
@@ -1605,14 +1627,14 @@ function drawShop() {
   g.clear();
   g.fillStyle(0x02030c, 0.75);
   g.fillRect(0, 0, W, H);
-  tShop.head.setText('¡SUBISTE DE NIVEL!').setVisible(true);
-  tShop.cr.setText('CRÉDITOS ' + st.cr).setVisible(true);
+  tShop.head.setText(shop.f ? '¡SE ACERCA UN JEFE!' : '¡SUBISTE DE NIVEL!').setVisible(true);
+  tShop.cr.setText(shop.f ? 'ELIGE UN POWERUP GRATIS' : 'CRÉDITOS ' + st.cr).setVisible(true);
   tShop.foot.setText('< >  ELEGIR      [1] COMPRAR      [2] SALTAR').setVisible(true);
   const n = shop.c.length;
   tShop.cards.forEach((T, j) => {
     for (const k in T) T[k].setVisible(j < n);
     if (j >= n) return;
-    const i = shop.c[j], sel = j == shop.s, ok = st.cr >= price(i);
+    const i = shop.c[j], sel = j == shop.s, ok = st.cr >= cost(i);
     const cx = W / 2 + (j - (n - 1) / 2) * 230, x0 = cx - 100, x1 = cx + 100, y0 = 160, y1 = 455;
     const col = sel ? 0xff3cf0 : HC, dim = ok ? 1 : 0.45;
     // Marco con esquinas cortadas.
@@ -1633,7 +1655,7 @@ function drawShop() {
     T.n.setPosition(cx, 228).setText(PW[i].n).setAlpha(dim);
     T.l.setPosition(cx, 272).setText(st.pw[i] + 1 + '/4').setAlpha(dim);
     T.d.setPosition(cx, 340).setText(PW[i].d).setAlpha(dim);
-    T.p.setPosition(cx, 420).setText('PRECIO ' + price(i)).setColor(ok ? '#ffb02e' : '#ff5a6a');
+    T.p.setPosition(cx, 420).setText(shop.f ? 'GRATIS' : 'PRECIO ' + price(i)).setColor(ok ? '#ffb02e' : '#ff5a6a');
   });
 }
 
@@ -1846,7 +1868,7 @@ function nz(ac, at, dur, vol, type, fc) {
 }
 
 function beat(ac, n, at) {
-  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], L = menu ? 0 : st.lvl;
+  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], L = menu ? 0 : st.lvl + (boss ? 3 : 0);
   STEP = 60 / (148 + Math.min(16, Math.max(0, L - 5) * 2)) / 4;
   if (s % 4 == 0) {
     // Bombo: va directo a la salida y agacha el resto (efecto "sidechain" que bombea).
@@ -1953,4 +1975,240 @@ function updateEntry() {
   gShop.fillStyle(0xff3cf0, k);
   gShop.fillTriangle(x - 10, 270, x + 10, 270, x, 258);
   gShop.fillTriangle(x - 10, 378, x + 10, 378, x, 390);
+}
+
+// ---------- Jefes ----------
+// Al llenar la barra de experiencia aparece un jefe y dejan de llegar enemigos nuevos; hay
+// que vencerlo para subir de nivel. Rotan tres jefes y en cada vuelta tienen más vida y
+// ataques más densos:
+// 0 FORTALEZA: hexágonos anidados que giran; dispara anillos y ráfagas en espiral.
+// 1 NÚCLEO: centro protegido por tres escudos giratorios que frenan los disparos; dispara
+//   abanicos y siembra minas alrededor del jugador.
+// 2 TITÁN: serpiente gigante; solo la cabeza recibe daño. Persigue, marca una línea de
+//   aviso y embiste; al terminar la embestida suelta un anillo de proyectiles.
+// boss: {k, x, y, hp, mx (vida máxima), a (giro), m (rumbo), t (reloj de ataque), c (paso),
+//        hf (destello), hc (espera entre golpes al jugador), d (muriendo), s (segmentos del titán)}
+const BN = ['FORTALEZA', 'NÚCLEO', 'TITÁN'];
+const BC = [ORA, SPC, GRN];
+const BR2 = [62, 30, 26]; // radio que recibe daño
+
+// Aviso grande en el centro: título y subtítulo, con el resplandor del color c.
+function banner(t, sub, c) {
+  const h = '#' + c.toString(16).padStart(6, '0');
+  tBan.setText(t).setShadow(0, 0, h, 16, true, true);
+  tBanS.setText(sub).setShadow(0, 0, h, 10, true, true);
+  banT = 2.6;
+}
+
+function spawnBoss() {
+  const k = st.bn % 3, a = Math.random() * 6.28, hp = 45 + st.bn * 25;
+  boss = { k, x: pl.x + Math.cos(a) * 520, y: pl.y + Math.sin(a) * 520, hp, mx: hp, a: 0, m: a + Math.PI, t: 2, c: 0, hf: 0, hc: 0, d: 0 };
+  if (k == 2) boss.s = Array.from({ length: 16 }, () => ({ x: boss.x, y: boss.y }));
+  banner('¡JEFE!', BN[k], BC[k]);
+  sfx.warn();
+}
+
+// Proyectil enemigo desde (x, y) en el ángulo a.
+const eb = (x, y, a, v, c) => eshots.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 4, c, d: 0.2 });
+
+// ¿El ángulo a choca con alguno de los tres escudos del núcleo?
+const shieldAt = (B, a) => [0, 1, 2].some((i) => Math.abs(Math.atan2(Math.sin(a - B.a * 1.4 - i * 2.09), Math.cos(a - B.a * 1.4 - i * 2.09))) < 0.65);
+
+function hitBoss(n) {
+  const B = boss;
+  if (!B || B.d) return;
+  B.hp -= n;
+  B.hf = 0.06;
+  sfx.hit();
+  if (B.hp <= 0) B.d = 1.4;
+}
+
+function updateBoss(s) {
+  const B = boss;
+  if (!B) return;
+  const T = (st.bn / 3) | 0, sp = spd(), R = BR2[B.k];
+  const px = pl.x - B.x, py = pl.y - B.y, d = Math.hypot(px, py), toP = Math.atan2(py, px);
+  B.a += s;
+  B.hf -= s;
+  B.hc -= s;
+  // Muriendo: explosiones por todo el cuerpo y al final una enorme.
+  if (B.d) {
+    if (Math.random() < s * 14) boom(B.x + (Math.random() - 0.5) * 140, B.y + (Math.random() - 0.5) * 140, 50, YEL, BC[B.k]);
+    if ((B.d -= s) <= 0) bossDown();
+    return;
+  }
+  B.t -= s;
+  if (B.k < 2) {
+    // Se acerca hasta ~260 del jugador y lo rodea despacio.
+    const want = d > 300 ? toP : d < 220 ? toP + Math.PI : toP + Math.PI / 2;
+    B.m = Phaser.Math.Angle.RotateTo(B.m, want, s);
+    B.x += Math.cos(B.m) * 55 * sp * s;
+    B.y += Math.sin(B.m) * 55 * sp * s;
+  }
+  if (B.k == 0) {
+    if (B.t <= 0) {
+      if (B.c++ % 2 == 0) {
+        const n = 14 + T * 4;
+        for (let i = 0; i < n; i++) eb(B.x, B.y, (i / n) * 6.28 + B.a, 170 * sp, ORA);
+        sfx.eshoot2();
+        B.t = 1.6 / sp;
+      } else {
+        B.sp = 1.8;
+        B.t = 2.6 / sp;
+      }
+    }
+    if (B.sp > 0) {
+      B.sp -= s;
+      if ((B.ft = (B.ft || 0) - s) <= 0) {
+        B.ft = 0.09;
+        for (let j = 0; j < 3 + T; j++) eb(B.x, B.y, B.a * 2.2 + (j * 6.28) / (3 + T), 210 * sp, YEL);
+      }
+    }
+  } else if (B.k == 1) {
+    if (B.t <= 0) {
+      if (B.c++ % 3 == 2) {
+        for (let i = 0; i < 2 + T; i++) {
+          const a = Math.random() * 6.28, r = 120 + Math.random() * 120;
+          mines.push({ x: pl.x + Math.cos(a) * r, y: pl.y + Math.sin(a) * r, a: Math.random() * 6.28, t: 0, hp: 3, hf: 0, bp: 0.3 });
+        }
+        sfx.mine();
+        B.t = 2.4 / sp;
+      } else {
+        const n = 3 + T * 2;
+        for (let i = 0; i < n; i++) eb(B.x, B.y, toP + (i - (n - 1) / 2) * 0.22, 260 * sp, SPC);
+        sfx.eshoot2();
+        B.t = 0.9 / sp;
+      }
+    }
+  } else {
+    // c: 0 persigue, 1 apunta (línea de aviso), 2 embiste.
+    if (B.t <= 0) {
+      if (B.c == 2) {
+        const n = 10 + T * 4;
+        for (let i = 0; i < n; i++) eb(B.x, B.y, (i / n) * 6.28, 180 * sp, GRN);
+        sfx.eshoot2();
+      }
+      B.c = (B.c + 1) % 3;
+      B.t = [3 / sp, 0.8, 0.8][B.c];
+      if (B.c == 1) sfx.warn();
+      if (B.c == 2) sfx.dash();
+    }
+    if (B.c < 2) B.m = Phaser.Math.Angle.RotateTo(B.m, toP + (B.c ? 0 : Math.sin(B.a * 3) * 0.6), s * (B.c ? 4 : 2));
+    const v = [130 * sp, 0, 640 * sp][B.c];
+    B.x += Math.cos(B.m) * v * s;
+    B.y += Math.sin(B.m) * v * s;
+    let f = B;
+    for (const g of B.s) {
+      const gd = Math.hypot(f.x - g.x, f.y - g.y);
+      if (gd > 30) {
+        g.x = f.x - ((f.x - g.x) / gd) * 30;
+        g.y = f.y - ((f.y - g.y) / gd) * 30;
+      }
+      f = g;
+    }
+  }
+  // Disparos del jugador: los escudos del núcleo y el cuerpo del titán los frenan.
+  for (const b of shots) {
+    if (b.t <= 0) continue;
+    const dx = b.x - B.x, dy = b.y - B.y, r = Math.hypot(dx, dy);
+    if ((B.k == 1 && r > 38 && r < 62 && shieldAt(B, Math.atan2(dy, dx))) || (B.k == 2 && B.s.some((g) => Math.hypot(b.x - g.x, b.y - g.y) < 20))) b.t = 0;
+    else if (r < R) {
+      b.t = 0;
+      hitBoss(1);
+    }
+  }
+  shots = shots.filter((b) => b.t > 0);
+  // Tocarlo daña, con una pausa antes de volver a dañar.
+  const touch = d < R + pl.r || (B.k == 2 && B.s.some((g) => Math.hypot(pl.x - g.x, pl.y - g.y) < 18 + pl.r));
+  if (touch && B.hc <= 0 && !st.dead) {
+    B.hc = 0.8;
+    hurt(0.4);
+  }
+}
+
+// Jefe vencido: explosión final, gran recompensa y nivel nuevo; la tienda se abre después.
+function bossDown() {
+  const B = boss;
+  boom(B.x, B.y, 220, 0xffffff, BC[B.k]);
+  st.pts += 1000 * (st.bn + 1);
+  st.cr += 15 + 5 * st.bn;
+  drop(B.x, B.y, 14);
+  st.bn++;
+  boss = null;
+  st.xp = 0;
+  st.lvl++;
+  sfx.lvl();
+  const news = { 2: '¡LLEGAN FORMACIONES!', 5: '¡MINAS EN TRIÁNGULO!', 15: 'DIFICULTAD MÁXIMA' };
+  banner('NIVEL ' + st.lvl, news[st.lvl] || (st.lvl < 15 ? 'MÁS RÁPIDO  ·  MÁS ENEMIGOS' : '¡SIGUE VIVO!'), HC);
+  st.sw = 1.8;
+}
+
+function bossLight() {
+  const B = boss, c = BC[B.k];
+  light(B.x, B.y, 200, 0.7, c);
+  if (B.k == 2) {
+    for (const g of B.s) light(g.x, g.y, 70, 0.4, c);
+    // Línea de aviso antes de embestir, en rojo.
+    if (B.c == 1) for (let k = 60; k < 700; k += 60) light(B.x + Math.cos(B.m) * k, B.y + Math.sin(B.m) * k, 50, 0.6, RED);
+  }
+}
+
+function drawBoss() {
+  const B = boss;
+  if (!B || (B.d && Math.random() < 0.3)) return;
+  const c = B.hf > 0 ? 0xffffff : BC[B.k], ls = [];
+  if (B.k == 0) {
+    for (const [r, v] of [[62, 1], [44, -1.5], [26, 2]]) ls.push(hexPts(B.x, B.y, r, B.a * v));
+  } else if (B.k == 1) {
+    ls.push(hexPts(B.x, B.y, 28, B.a * 2), hexPts(B.x, B.y, 14, -B.a * 3));
+  } else {
+    const u = Math.cos(B.m), w = Math.sin(B.m), P = (f, l) => ({ x: B.x + u * f - w * l, y: B.y + w * f + u * l });
+    ls.push([P(30, 0), P(-6, -24), P(-18, 0), P(-6, 24), P(30, 0)]);
+    B.s.forEach((g, i) => ls.push(hexPts(g.x, g.y, 16 - i * 0.5, B.a * 2 + i)));
+  }
+  for (const [w, al] of [[12, 0.12], [5, 0.35], [2, 1]]) {
+    gE.lineStyle(w, w > 2 ? c : 0xfff0f8, al);
+    for (const l of ls) gE.strokePoints(l, true);
+    if (B.k == 1) {
+      for (let i = 0; i < 3; i++) {
+        const a = B.a * 1.4 + i * 2.09;
+        gE.beginPath();
+        gE.arc(B.x, B.y, 50, a - 0.65, a + 0.65);
+        gE.strokePath();
+      }
+    }
+  }
+  if (B.k == 2 && B.c == 1) {
+    gE.lineStyle(2, RED, 0.5 + 0.5 * Math.sin(B.a * 30));
+    gE.lineBetween(B.x, B.y, B.x + Math.cos(B.m) * 700, B.y + Math.sin(B.m) * 700);
+  }
+}
+
+// Barra de vida del jefe bajo el puntaje, flecha en el borde si está fuera de pantalla,
+// y el aviso grande en el centro.
+function drawBossHud() {
+  const B = boss;
+  tBoss.setVisible(!!B);
+  if (B) {
+    tBoss.setText(BN[B.k]);
+    gH.fillStyle(HB, 0.3);
+    gH.fillRect(250, 98, 300, 6);
+    gH.fillStyle(B.hf > 0 ? 0xffffff : BC[B.k], 0.95);
+    gH.fillRect(250, 98, 300 * Math.max(0, B.hp / B.mx), 6);
+    const sx = B.x - cx + W / 2, sy = B.y - cy + H / 2;
+    if (sx < 0 || sx > W || sy < 0 || sy > H) {
+      const a = Math.atan2(sy - H / 2, sx - W / 2), x = Phaser.Math.Clamp(sx, 30, W - 30), y = Phaser.Math.Clamp(sy, 120, H - 30);
+      gH.fillStyle(BC[B.k], 0.5 + 0.5 * Math.sin(B.a * 8));
+      gH.fillTriangle(x + Math.cos(a) * 14, y + Math.sin(a) * 14, x + Math.cos(a + 2.4) * 10, y + Math.sin(a + 2.4) * 10, x + Math.cos(a - 2.4) * 10, y + Math.sin(a - 2.4) * 10);
+    }
+  }
+  const on = banT > 0;
+  tBan.setVisible(on);
+  tBanS.setVisible(on);
+  if (on) {
+    // Entra grande y se asienta; tiembla un poco (glitch) y se desvanece al final.
+    const al = Math.min(1, banT * 2), g = Math.random() < 0.08 ? (Math.random() - 0.5) * 14 : 0;
+    tBan.setAlpha(al).setScale(1 + Math.max(0, banT - 2.3) * 2).setX(W / 2 + g);
+    tBanS.setAlpha(al);
+  }
 }
