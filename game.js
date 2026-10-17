@@ -930,6 +930,19 @@ function fade(s) {
 
 // Sonidos sintetizados con Web Audio (sin archivos).
 let nbuf; // buffer de ruido blanco, se crea una vez
+// Salida de los efectos: un compresor que solo actúa en los picos, para que muchos sonidos a
+// la vez (explosiones en cadena, impactos de láser) no saturen.
+let sb;
+function bus(ac) {
+  if (!sb) {
+    sb = ac.createDynamicsCompressor();
+    sb.threshold.value = -10;
+    sb.knee.value = 10;
+    sb.ratio.value = 8;
+    sb.connect(ac.destination);
+  }
+  return sb;
+}
 function nb(ac) {
   if (!nbuf) {
     nbuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
@@ -947,7 +960,7 @@ function tone(f0, f1, dur, type, vol) {
   o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(ac.destination);
+  o.connect(g).connect(bus(ac));
   o.start(t);
   o.stop(t + dur);
 }
@@ -961,7 +974,7 @@ function noise(dur, vol, f0, f1) {
   f.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(vol, t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  n.connect(f).connect(g).connect(ac.destination);
+  n.connect(f).connect(g).connect(bus(ac));
   n.start(t);
   n.stop(t + dur);
 }
@@ -1001,6 +1014,21 @@ const sfx = {
     tone(140 / v, 35, 0.45 * v, 'sine', 0.35 * v);
   },
 };
+
+// Cada efecto suena como mucho una vez cada 40 ms: si 14 cuadrados explotan en el mismo
+// cuadro, se oye una explosión y no 14 encimadas. Una explosión más grande que la
+// anterior sí suena (la final del jefe no se pierde).
+const sfxT = {}, sfxV = {};
+for (const k in sfx) {
+  const f = sfx[k];
+  sfx[k] = (...a) => {
+    const t = Date.now();
+    if (t - (sfxT[k] || 0) < 40 && !(a[0] > sfxV[k])) return;
+    sfxT[k] = t;
+    sfxV[k] = a[0];
+    f(...a);
+  };
+}
 
 // Puntos locales [[x, y], ...] rotados según o.a y trasladados a (o.x, o.y).
 function shape(o, pts) {
