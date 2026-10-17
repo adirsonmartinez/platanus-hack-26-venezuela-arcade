@@ -1,5 +1,11 @@
 // Platanus Hack 26 — Caracas
-// Base vacía: configuración de Phaser y controles de la máquina arcade.
+// Neón en una grilla infinita: sobrevive, sube de nivel y vence a los jefes.
+
+// Todo el juego vive dentro de esta función para que el minificador pueda acortar los
+// nombres (en el nivel superior serían globales y quedarían completos). Sin sangría extra.
+(() => {
+const { sin, cos, hypot, atan2, random, min, max, abs, PI, floor, round, ceil, SQRT1_2 } = Math;
+const rotTo = Phaser.Math.Angle.RotateTo, clamp = Phaser.Math.Clamp;
 
 const W = 800;
 const H = 600;
@@ -136,7 +142,7 @@ const DASH = 0.16, DSPD = 1100, DCD = 1.4; // dash: duración, velocidad y recar
 
 // Dificultad: sube con cada nivel hasta el 15. dif() va de 0 a 14 y spd() multiplica las
 // velocidades (hasta 1.84 veces): todo se mueve y dispara más rápido, y aparecen más enemigos.
-const dif = () => Math.min(st.lvl - 1, 14);
+const dif = () => min(st.lvl - 1, 14);
 const spd = () => 1 + dif() * 0.06;
 const TRIG = 140; // distancia que los activa
 const ARM = 1.2; // segundos de vibración antes de explotar
@@ -204,7 +210,7 @@ function create() {
   lv = new Map();
   // a: giro del hexágono; f: ángulo del frente (hacia donde dispara); cd: enfriamiento del disparo
   // dt: tiempo de dash restante; dc: recarga del dash; vx, vy: dirección del dash; gh: estela
-  pl = { x: 0, y: 0, r: 16, a: 0, f: -Math.PI / 2, sp: 220, cd: 0, dt: 0, dc: 0, vx: 0, vy: 0, gh: [] };
+  pl = { x: 0, y: 0, r: 16, a: 0, f: -PI / 2, sp: 220, cd: 0, dt: 0, dc: 0, vx: 0, vy: 0, gh: [] };
   shots = [];
   foes = [];
   blasts = [];
@@ -229,8 +235,8 @@ function create() {
   // z: cuánto se mueven con la cámara (más bajo = más lejos y más tenue)
   stars = [];
   for (let i = 0; i < 110; i++) {
-    const z = 0.1 + Math.random() * 0.5;
-    stars.push({ x: Math.random() * W, y: Math.random() * H, z, sz: z > 0.45 ? 2 : 1, al: 0.15 + z });
+    const z = 0.1 + random() * 0.5;
+    stars.push({ x: random() * W, y: random() * H, z, sz: z > 0.45 ? 2 : 1, al: 0.15 + z });
   }
 }
 
@@ -273,7 +279,7 @@ function update(_, dt) {
   st.hf -= s;
   if (st.pf) st.pf[1] -= s;
   // La barra de escudo se regenera sola tras 2 segundos sin recibir daño.
-  if ((st.rg -= s) <= 0 && !st.dead) st.sh = Math.min(1, st.sh + s * 0.35);
+  if ((st.rg -= s) <= 0 && !st.dead) st.sh = min(1, st.sh + s * 0.35);
   if (st.dead) {
     st.dead += s;
     // Fin de partida: si el puntaje entra en la tabla, primero se ingresan las iniciales.
@@ -290,7 +296,7 @@ function update(_, dt) {
   let dx = (held.P1_R ? 1 : 0) - (held.P1_L ? 1 : 0);
   let dy = (held.P1_D ? 1 : 0) - (held.P1_U ? 1 : 0);
   if (!live) dx = dy = 0;
-  if (dx && dy) { dx *= Math.SQRT1_2; dy *= Math.SQRT1_2; }
+  if (dx && dy) { dx *= SQRT1_2; dy *= SQRT1_2; }
   pl.x += dx * pl.sp * s;
   pl.y += dy * pl.sp * s;
   // Dash: [2] da un impulso corto y veloz hacia donde te mueves (o hacia el frente si estás
@@ -299,8 +305,8 @@ function update(_, dt) {
   if (live && pressed.P1_2 && pl.dc <= 0) {
     pl.dc = DCD;
     pl.dt = DASH;
-    pl.vx = dx || dy ? dx : Math.cos(pl.f);
-    pl.vy = dx || dy ? dy : Math.sin(pl.f);
+    pl.vx = dx || dy ? dx : cos(pl.f);
+    pl.vy = dx || dy ? dy : sin(pl.f);
     sfx.dash();
   }
   if (pl.dt > 0) {
@@ -315,13 +321,13 @@ function update(_, dt) {
   pl.a += s * 0.6;
 
   // El frente gira suave hacia la dirección en que se mueve el jugador.
-  if (dx || dy) pl.f = Phaser.Math.Angle.RotateTo(pl.f, Math.atan2(dy, dx), s * 12);
+  if (dx || dy) pl.f = rotTo(pl.f, atan2(dy, dx), s * 12);
 
   // Disparo: mantener P1_1 dispara en ráfaga desde la punta del frente.
   pl.cd -= s;
   if (live && held.P1_1 && pl.cd <= 0) {
     pl.cd = 0.14;
-    const ux = Math.cos(pl.f), uy = Math.sin(pl.f);
+    const ux = cos(pl.f), uy = sin(pl.f);
     sfx.shoot();
     shots.push({ x: pl.x + ux * (pl.r + 8), y: pl.y + uy * (pl.r + 8), vx: ux * 640, vy: uy * 640, t: 1.1 });
   }
@@ -345,9 +351,9 @@ function update(_, dt) {
   updateItems(s);
 
   // La cámara solo sigue al jugador cuando sale de la zona muerta, y lo hace suave.
-  const tx = pl.x - Phaser.Math.Clamp(pl.x - cx, -DZX, DZX);
-  const ty = pl.y - Phaser.Math.Clamp(pl.y - cy, -DZY, DZY);
-  const k = Math.min(1, s * 4);
+  const tx = pl.x - clamp(pl.x - cx, -DZX, DZX);
+  const ty = pl.y - clamp(pl.y - cy, -DZY, DZY);
+  const k = min(1, s * 4);
   cx += (tx - cx) * k;
   cy += (ty - cy) * k;
   this.cameras.main.setScroll(cx - W / 2, cy - H / 2);
@@ -359,7 +365,7 @@ function update(_, dt) {
   for (const b of shots) light(b.x, b.y, 70, 0.5, b.c);
   for (const b of beams) {
     for (const a of beamAngles(b)) {
-      for (let k = 40; k < b.len; k += 60) light(pl.x + Math.cos(a) * k, pl.y + Math.sin(a) * k, 70, 0.6, PNK);
+      for (let k = 40; k < b.len; k += 60) light(pl.x + cos(a) * k, pl.y + sin(a) * k, 70, 0.6, PNK);
     }
   }
   for (const e of foes) {
@@ -372,7 +378,7 @@ function update(_, dt) {
   for (const e of dias) light(e.x, e.y, 70, 0.45, DB);
   // Mina: toda su área de daño se tiñe de rojo, cada vez más fuerte.
   for (const k of snakes) for (const e of k.s) light(e.x, e.y, 70, 0.4, GRN);
-  for (const e of mines) light(e.x, e.y, MR, 0.25 + 0.6 * Math.min(1, e.t / FUSE), MC, 1);
+  for (const e of mines) light(e.x, e.y, MR, 0.25 + 0.6 * min(1, e.t / FUSE), MC, 1);
   for (const e of blasts) if (e.t < 0.3) light(e.x, e.y, e.r * 2.2, 1, e.k);
   for (const b of eshots) light(b.x, b.y, 60, 0.4, b.c);
   if (boss) bossLight();
@@ -390,20 +396,20 @@ function update(_, dt) {
 
 function updateFoes(s) {
   // Mantener FN enemigos cerca: aparecen fuera de pantalla y desaparecen si quedan muy lejos.
-  foes = foes.filter((e) => Math.hypot(e.x - pl.x, e.y - pl.y) < 1300);
+  foes = foes.filter((e) => hypot(e.x - pl.x, e.y - pl.y) < 1300);
   let n = foes.filter((e) => !e.g).length;
   for (; !boss && n < FN + dif(); n++) {
-    const a = Math.random() * 6.28, d = 520 + Math.random() * 500;
-    const m = Math.random() * 6.28, v = (15 + Math.random() * 30) * spd();
+    const a = random() * 6.28, d = 520 + random() * 500;
+    const m = random() * 6.28, v = (15 + random() * 30) * spd();
     foes.push({
-      x: pl.x + Math.cos(a) * d, y: pl.y + Math.sin(a) * d,
-      vx: Math.cos(m) * v, vy: Math.sin(m) * v,
-      a: Math.random() * 6.28, va: (Math.random() - 0.5) * 1.5, t: 0,
+      x: pl.x + cos(a) * d, y: pl.y + sin(a) * d,
+      vx: cos(m) * v, vy: sin(m) * v,
+      a: random() * 6.28, va: (random() - 0.5) * 1.5, t: 0,
     });
   }
   // Desde el nivel 2 llegan formaciones que viajan juntas, cada vez más seguidas y grandes.
   if (st.lvl > 1 && !boss && !st.dead && (ft -= s) <= 0) {
-    ft = Math.max(5, 14 - dif()) + Math.random() * 3;
+    ft = max(5, 14 - dif()) + random() * 3;
     formation();
   }
   for (const g of new Set(foes.map((e) => e.g).filter(Boolean))) {
@@ -414,7 +420,7 @@ function updateFoes(s) {
   for (const e of foes) {
     // En formación: su lugar es el punto (ox, oy) del grupo, girado con él.
     if (e.g && e.t <= 0) {
-      const c = Math.cos(e.g.a), sn = Math.sin(e.g.a);
+      const c = cos(e.g.a), sn = sin(e.g.a);
       e.x = e.g.x + e.ox * c - e.oy * sn;
       e.y = e.g.y + e.ox * sn + e.oy * c;
     }
@@ -433,10 +439,10 @@ function updateFoes(s) {
     e.y += e.vy * s;
     e.a += e.va * s;
     // Al activarse se suelta de su formación y se queda quieto.
-    if (!st.dead && Math.hypot(e.x - pl.x, e.y - pl.y) < TRIG) e.t = ARM, e.bp = 0, e.g = null;
+    if (!st.dead && hypot(e.x - pl.x, e.y - pl.y) < TRIG) e.t = ARM, e.bp = 0, e.g = null;
     // Un proyectil lo hace explotar al instante.
     for (const b of shots) {
-      if (b.t > 0 && Math.hypot(e.x - b.x, e.y - b.y) < 20) {
+      if (b.t > 0 && hypot(e.x - b.x, e.y - b.y) < 20) {
         b.t = 0;
         killFoe(e);
         break;
@@ -462,11 +468,11 @@ function updateFoes(s) {
 // 0 anillo que gira, 1 muro, 2 flecha que apunta al jugador, 3 rejilla que gira.
 // Al ser cuadrados, una sola explosión puede detonar la formación entera en cadena.
 function formation() {
-  const D = dif(), a = Math.random() * 6.28, v = 70 * spd(), k = (Math.random() * 4) | 0, P = [];
-  const g = { x: pl.x + Math.cos(a) * 700, y: pl.y + Math.sin(a) * 700, vx: -Math.cos(a) * v, vy: -Math.sin(a) * v, a, va: 0 };
+  const D = dif(), a = random() * 6.28, v = 70 * spd(), k = (random() * 4) | 0, P = [];
+  const g = { x: pl.x + cos(a) * 700, y: pl.y + sin(a) * 700, vx: -cos(a) * v, vy: -sin(a) * v, a, va: 0 };
   if (k == 0) {
     const n = 8 + (D >> 1), r = 70 + n * 5;
-    for (let i = 0; i < n; i++) P.push([Math.cos((i / n) * 6.28) * r, Math.sin((i / n) * 6.28) * r]);
+    for (let i = 0; i < n; i++) P.push([cos((i / n) * 6.28) * r, sin((i / n) * 6.28) * r]);
     g.va = 0.7;
   } else if (k == 1) {
     const n = 6 + (D >> 1);
@@ -479,34 +485,34 @@ function formation() {
     for (let i = 0; i < n * n; i++) P.push([((i % n) - (n - 1) / 2) * 52, (((i / n) | 0) - (n - 1) / 2) * 52]);
     g.va = 0.5;
   }
-  for (const [ox, oy] of P) foes.push({ x: g.x, y: g.y, vx: 0, vy: 0, a: Math.random() * 6.28, va: 1.2, t: 0, g, ox, oy });
+  for (const [ox, oy] of P) foes.push({ x: g.x, y: g.y, vx: 0, vy: 0, a: random() * 6.28, va: 1.2, t: 0, g, ox, oy });
   sfx.warn();
 }
 
 function updateJets(s) {
-  jets = jets.filter((j) => !j.dead && Math.hypot(j.x - pl.x, j.y - pl.y) < 1400);
+  jets = jets.filter((j) => !j.dead && hypot(j.x - pl.x, j.y - pl.y) < 1400);
   JT.forEach((T, t) => {
     while (!boss && jets.filter((j) => j.t == t).length < T.n + ((dif() / (3 + t)) | 0)) {
-      const a = Math.random() * 6.28, d = 650 + Math.random() * 400;
-      jets.push({ t, x: pl.x + Math.cos(a) * d, y: pl.y + Math.sin(a) * d, a: a + Math.PI, m: a + Math.PI, cd: 1 + Math.random() * 2, hp: T.hp, hf: 0 });
+      const a = random() * 6.28, d = 650 + random() * 400;
+      jets.push({ t, x: pl.x + cos(a) * d, y: pl.y + sin(a) * d, a: a + PI, m: a + PI, cd: 1 + random() * 2, hp: T.hp, hf: 0 });
     }
   });
   for (const j of jets) {
     const T = JT[j.t];
-    const px = pl.x - j.x, py = pl.y - j.y, d = Math.hypot(px, py), toP = Math.atan2(py, px);
+    const px = pl.x - j.x, py = pl.y - j.y, d = hypot(px, py), toP = atan2(py, px);
     // Lejos: se acerca. Muy cerca: se aleja. A buena distancia: rodea al jugador.
-    const want = d > T.d + 60 ? toP : d < T.d - 60 ? toP + Math.PI : toP + Math.PI / 2;
-    j.m = Phaser.Math.Angle.RotateTo(j.m, want, s * 2.5);
-    j.x += Math.cos(j.m) * T.sp * spd() * s;
-    j.y += Math.sin(j.m) * T.sp * spd() * s;
+    const want = d > T.d + 60 ? toP : d < T.d - 60 ? toP + PI : toP + PI / 2;
+    j.m = rotTo(j.m, want, s * 2.5);
+    j.x += cos(j.m) * T.sp * spd() * s;
+    j.y += sin(j.m) * T.sp * spd() * s;
     // El avión apunta hacia donde vuela; la nave doble gira para mirar al jugador.
-    j.a = j.t ? Phaser.Math.Angle.RotateTo(j.a, toP, s * 2) : j.m;
+    j.a = j.t ? rotTo(j.a, toP, s * 2) : j.m;
     j.hf -= s;
     if ((j.cd -= s) <= 0 && d < 500 && !st.dead) {
-      j.cd = (T.cd + Math.random() * 0.8) / (1 + dif() * 0.05);
+      j.cd = (T.cd + random() * 0.8) / (1 + dif() * 0.05);
       if (j.t) {
         // Dos proyectiles paralelos, uno desde cada ala, en la dirección en que mira.
-        const ux = Math.cos(j.a), uy = Math.sin(j.a);
+        const ux = cos(j.a), uy = sin(j.a);
         for (const o of [-14, 14]) {
           eshots.push({ x: j.x - uy * o, y: j.y + ux * o, vx: ux * 260 * spd(), vy: uy * 260 * spd(), t: 2.8, c: PNK, d: 0.2 });
         }
@@ -517,7 +523,7 @@ function updateJets(s) {
       }
     }
     for (const b of shots) {
-      if (b.t > 0 && Math.hypot(j.x - b.x, j.y - b.y) < T.r + 4) {
+      if (b.t > 0 && hypot(j.x - b.x, j.y - b.y) < T.r + 4) {
         b.t = 0;
         j.hf = 0.08;
         if (--j.hp <= 0) killJet(j);
@@ -538,7 +544,7 @@ function updateJets(s) {
     b.x += b.vx * s;
     b.y += b.vy * s;
     b.t -= s;
-    if (!st.dead && Math.hypot(b.x - pl.x, b.y - pl.y) < pl.r + 3) {
+    if (!st.dead && hypot(b.x - pl.x, b.y - pl.y) < pl.r + 3) {
       b.t = 0;
       hurt(b.d);
     }
@@ -551,33 +557,33 @@ function updateJets(s) {
 function boom(x, y, r, c, k, dmg) {
   blasts.push({ x, y, t: 0, r, c, k });
   if (dmg) {
-    if (Math.hypot(x - pl.x, y - pl.y) < r + pl.r) hurt(dmg);
+    if (hypot(x - pl.x, y - pl.y) < r + pl.r) hurt(dmg);
     blastHit(x, y, r);
   }
   for (let i = 0; i < r / 4; i++) {
-    const a = Math.random() * 6.28, v = 120 + Math.random() * r * 3.5;
-    bits.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0.4 + Math.random() * 0.6, c: i % 3 ? c : k });
+    const a = random() * 6.28, v = 120 + random() * r * 3.5;
+    bits.push({ x, y, vx: cos(a) * v, vy: sin(a) * v, t: 0.4 + random() * 0.6, c: i % 3 ? c : k });
   }
   sc.cameras.main.shake(r * 1.5, r * 0.00007);
   sfx.boom(r / BR);
 }
 
 function updateSpins(s) {
-  spins = spins.filter((e) => !e.dead && Math.hypot(e.x - pl.x, e.y - pl.y) < 1400);
+  spins = spins.filter((e) => !e.dead && hypot(e.x - pl.x, e.y - pl.y) < 1400);
   while (!boss && spins.length < SN + (dif() >> 2)) {
-    const a = Math.random() * 6.28, d = 600 + Math.random() * 500;
-    spins.push({ x: pl.x + Math.cos(a) * d, y: pl.y + Math.sin(a) * d, a: 0, m: Math.random() * 6.28, hp: 4, hf: 0, hc: 0 });
+    const a = random() * 6.28, d = 600 + random() * 500;
+    spins.push({ x: pl.x + cos(a) * d, y: pl.y + sin(a) * d, a: 0, m: random() * 6.28, hp: 4, hf: 0, hc: 0 });
   }
   for (const e of spins) {
     // Gira siempre y cambia de rumbo poco a poco, al azar.
     e.a += s * 3;
-    e.m += (Math.random() - 0.5) * s * 3;
-    e.x += Math.cos(e.m) * 60 * spd() * s;
-    e.y += Math.sin(e.m) * 60 * spd() * s;
+    e.m += (random() - 0.5) * s * 3;
+    e.x += cos(e.m) * 60 * spd() * s;
+    e.y += sin(e.m) * 60 * spd() * s;
     e.hf -= s;
     e.hc -= s;
     for (const b of shots) {
-      if (b.t > 0 && Math.hypot(e.x - b.x, e.y - b.y) < SR + 4) {
+      if (b.t > 0 && hypot(e.x - b.x, e.y - b.y) < SR + 4) {
         b.t = 0;
         e.hf = 0.08;
         if (--e.hp <= 0) killSpin(e);
@@ -586,7 +592,7 @@ function updateSpins(s) {
       }
     }
     // No muere al tocarte: te daña y espera un momento antes de volver a dañarte.
-    if (!e.dead && !st.dead && e.hc <= 0 && Math.hypot(e.x - pl.x, e.y - pl.y) < SR + pl.r) {
+    if (!e.dead && !st.dead && e.hc <= 0 && hypot(e.x - pl.x, e.y - pl.y) < SR + pl.r) {
       e.hc = 0.8;
       hurt(0.35);
     }
@@ -648,7 +654,7 @@ function killDia(e) {
 // Las explosiones de cuadrados y minas también alcanzan a los enemigos dentro del radio:
 // naves, espirales y diamantes mueren; cuadrados y minas detonan enseguida (reacción en cadena).
 function blastHit(x, y, r) {
-  const near = (e) => !e.dead && Math.hypot(e.x - x, e.y - y) < r;
+  const near = (e) => !e.dead && hypot(e.x - x, e.y - y) < r;
   for (const j of jets) if (near(j)) killJet(j);
   for (const e of spins) if (near(e)) killSpin(e);
   for (const e of dias) if (near(e)) killDia(e);
@@ -659,21 +665,21 @@ function blastHit(x, y, r) {
   }
   for (const e of foes) {
     if (near(e) && (e.t <= 0 || e.t > 0.2)) {
-      e.t = 0.1 + Math.random() * 0.15;
+      e.t = 0.1 + random() * 0.15;
       e.bp = 0;
     }
   }
-  for (const e of mines) if (near(e)) e.t = Math.max(e.t, FUSE - 0.15);
-  if (boss && Math.hypot(boss.x - x, boss.y - y) < r + 40) hitBoss(6);
+  for (const e of mines) if (near(e)) e.t = max(e.t, FUSE - 0.15);
+  if (boss && hypot(boss.x - x, boss.y - y) < r + 40) hitBoss(6);
 }
 
 function updateSnakes(s) {
-  snakes = snakes.filter((k) => k.s.length && Math.hypot(k.s[0].x - pl.x, k.s[0].y - pl.y) < 1500);
+  snakes = snakes.filter((k) => k.s.length && hypot(k.s[0].x - pl.x, k.s[0].y - pl.y) < 1500);
   while (!boss && snakes.length < SNN + (dif() >> 2)) {
-    const a = Math.random() * 6.28, d = 700 + Math.random() * 300, n = 4 + ((Math.random() * (9 + dif())) | 0);
-    const x = pl.x + Math.cos(a) * d, y = pl.y + Math.sin(a) * d, seg = [];
-    for (let i = 0; i < n; i++) seg.push({ x: x + Math.cos(a) * i * SGAP, y: y + Math.sin(a) * i * SGAP, a: 0, hf: 0 });
-    snakes.push({ s: seg, m: a + Math.PI, p: 0, hc: 0 });
+    const a = random() * 6.28, d = 700 + random() * 300, n = 4 + ((random() * (9 + dif())) | 0);
+    const x = pl.x + cos(a) * d, y = pl.y + sin(a) * d, seg = [];
+    for (let i = 0; i < n; i++) seg.push({ x: x + cos(a) * i * SGAP, y: y + sin(a) * i * SGAP, a: 0, hf: 0 });
+    snakes.push({ s: seg, m: a + PI, p: 0, hc: 0 });
   }
   const born = [];
   for (const k of snakes) {
@@ -681,13 +687,13 @@ function updateSnakes(s) {
     const h = k.s[0];
     k.p += s * 3;
     k.hc -= s;
-    const toP = Math.atan2(pl.y - h.y, pl.x - h.x);
-    k.m = Phaser.Math.Angle.RotateTo(k.m, toP + Math.sin(k.p) * 0.9, s * 3);
-    h.x += Math.cos(k.m) * SSP * spd() * s;
-    h.y += Math.sin(k.m) * SSP * spd() * s;
+    const toP = atan2(pl.y - h.y, pl.x - h.x);
+    k.m = rotTo(k.m, toP + sin(k.p) * 0.9, s * 3);
+    h.x += cos(k.m) * SSP * spd() * s;
+    h.y += sin(k.m) * SSP * spd() * s;
     // Cada segmento sigue al anterior manteniendo la separación.
     for (let i = 1; i < k.s.length; i++) {
-      const e = k.s[i], f = k.s[i - 1], d = Math.hypot(f.x - e.x, f.y - e.y);
+      const e = k.s[i], f = k.s[i - 1], d = hypot(f.x - e.x, f.y - e.y);
       if (d > SGAP) {
         e.x = f.x - ((f.x - e.x) / d) * SGAP;
         e.y = f.y - ((f.y - e.y) / d) * SGAP;
@@ -698,14 +704,14 @@ function updateSnakes(s) {
       e.a += s * 1.5;
       e.hf -= s;
       for (const b of shots) {
-        if (b.t > 0 && Math.hypot(e.x - b.x, e.y - b.y) < 16) {
+        if (b.t > 0 && hypot(e.x - b.x, e.y - b.y) < 16) {
           b.t = 0;
           killSeg(e);
           break;
         }
       }
       // Tocar cualquier segmento daña, con una pausa antes de volver a dañar.
-      if (!e.dead && !st.dead && k.hc <= 0 && Math.hypot(e.x - pl.x, e.y - pl.y) < pl.r + 12) {
+      if (!e.dead && !st.dead && k.hc <= 0 && hypot(e.x - pl.x, e.y - pl.y) < pl.r + 12) {
         k.hc = 0.8;
         hurt(0.3);
       }
@@ -722,7 +728,7 @@ function updateSnakes(s) {
       }
       if (cur.length) parts.push(cur);
       k.s = parts.shift() || [];
-      for (const ps of parts) born.push({ s: ps, m: Math.atan2(ps[0].y - ps[1 % ps.length].y, ps[0].x - ps[1 % ps.length].x) || 0, p: Math.random() * 6, hc: 0 });
+      for (const ps of parts) born.push({ s: ps, m: atan2(ps[0].y - ps[1 % ps.length].y, ps[0].x - ps[1 % ps.length].x) || 0, p: random() * 6, hc: 0 });
     }
   }
   snakes = snakes.concat(born).filter((k) => k.s.length);
@@ -731,13 +737,13 @@ function updateSnakes(s) {
 
 function updateMines(s) {
   if (!boss && !st.dead && (mt -= s) <= 0) {
-    mt = (7 + Math.random() * 6) / (1 + dif() * 0.1);
+    mt = (7 + random() * 6) / (1 + dif() * 0.1);
     // Aparece a una distancia que deja al jugador dentro del área: hay que salir corriendo.
     // Desde el nivel 5 a veces llegan tres en triángulo y hay que escapar por un hueco.
-    const a = Math.random() * 6.28, d = 90 + Math.random() * 60, tri = st.lvl >= 5 && Math.random() < 0.4;
+    const a = random() * 6.28, d = 90 + random() * 60, tri = st.lvl >= 5 && random() < 0.4;
     for (let i = 0; i < (tri ? 3 : 1); i++) {
       const b = a + i * 2.09, r = tri ? 160 : d;
-      mines.push({ x: pl.x + Math.cos(b) * r, y: pl.y + Math.sin(b) * r, a: Math.random() * 6.28, t: 0, hp: 3, hf: 0, bp: 0.3 });
+      mines.push({ x: pl.x + cos(b) * r, y: pl.y + sin(b) * r, a: random() * 6.28, t: 0, hp: 3, hf: 0, bp: 0.3 });
     }
     sfx.mine();
   }
@@ -755,7 +761,7 @@ function updateMines(s) {
     }
     // Se puede desactivar a disparos antes de que explote.
     for (const b of shots) {
-      if (b.t > 0 && Math.hypot(e.x - b.x, e.y - b.y) < 22) {
+      if (b.t > 0 && hypot(e.x - b.x, e.y - b.y) < 22) {
         b.t = 0;
         e.hf = 0.08;
         if (--e.hp <= 0) killMine(e);
@@ -770,23 +776,23 @@ function updateMines(s) {
 
 function updateWaves(s) {
   if (!boss && !st.dead && (wt -= s) <= 0) {
-    wt = (25 + Math.random() * 10) / (1 + dif() * 0.08);
+    wt = (25 + random() * 10) / (1 + dif() * 0.08);
     // 0: columnas (vertical), 1: filas (horizontal), 2: combinada (cruz).
-    const mode = (Math.random() * 3) | 0;
+    const mode = (random() * 3) | 0;
     const w = { n: 0, k: 0 };
     for (const vert of mode == 2 ? [1, 0] : [!mode, !mode]) {
       // Carril que pasa cerca del jugador, entrando por un borde de la pantalla.
-      const off = (Math.random() - 0.5) * 300, sg = Math.random() < 0.5 ? 1 : -1;
+      const off = (random() - 0.5) * 300, sg = random() < 0.5 ? 1 : -1;
       lanes.push(vert
-        ? { x: pl.x + off, y: cy - sg * (H / 2 + 30), a: (sg * Math.PI) / 2, t: WARN, w }
-        : { x: cx - sg * (W / 2 + 30), y: pl.y + off, a: sg > 0 ? 0 : Math.PI, t: WARN, w });
+        ? { x: pl.x + off, y: cy - sg * (H / 2 + 30), a: (sg * PI) / 2, t: WARN, w }
+        : { x: cx - sg * (W / 2 + 30), y: pl.y + off, a: sg > 0 ? 0 : PI, t: WARN, w });
     }
     sfx.warn();
   }
   for (const l of lanes) {
     if ((l.t -= s) > 0) continue;
     // Fin del aviso: entra la fila de diamantes, uno detrás de otro.
-    const ux = Math.cos(l.a), uy = Math.sin(l.a);
+    const ux = cos(l.a), uy = sin(l.a);
     for (let i = 0; i < DN; i++) {
       dias.push({ x: l.x - ux * i * DGAP, y: l.y - uy * i * DGAP, a: l.a, d: -i * DGAP, w: l.w, hf: 0 });
       l.w.n++;
@@ -796,18 +802,18 @@ function updateWaves(s) {
   dias = dias.filter((e) => !e.dead);
 
   for (const e of dias) {
-    e.x += Math.cos(e.a) * DSP * spd() * s;
-    e.y += Math.sin(e.a) * DSP * spd() * s;
+    e.x += cos(e.a) * DSP * spd() * s;
+    e.y += sin(e.a) * DSP * spd() * s;
     e.d += DSP * spd() * s;
     if (e.d > 1600) e.gone = true;
     for (const b of shots) {
-      if (b.t > 0 && Math.hypot(e.x - b.x, e.y - b.y) < 18) {
+      if (b.t > 0 && hypot(e.x - b.x, e.y - b.y) < 18) {
         b.t = 0;
         killDia(e);
         break;
       }
     }
-    if (!e.dead && !st.dead && Math.hypot(e.x - pl.x, e.y - pl.y) < pl.r + 12) {
+    if (!e.dead && !st.dead && hypot(e.x - pl.x, e.y - pl.y) < pl.r + 12) {
       e.dead = true;
       boom(e.x, e.y, 45, 0xffffff, DB);
       hurt(0.4);
@@ -824,15 +830,15 @@ const MAG = 80; // distancia a la que los atraes
 const OL = 8; // segundos que dura un punto soltado por un enemigo (parpadea los últimos 2)
 
 function updateOrbs(s) {
-  orbs = orbs.filter((o) => Math.hypot(o.x - pl.x, o.y - pl.y) < 1300);
+  orbs = orbs.filter((o) => hypot(o.x - pl.x, o.y - pl.y) < 1300);
   while (orbs.filter((o) => !o.v).length < ON) {
-    const a = Math.random() * 6.28, d = 450 + Math.random() * 750;
-    orbs.push({ x: pl.x + Math.cos(a) * d, y: pl.y + Math.sin(a) * d, vx: 0, vy: 0, p: Math.random() * 6 });
+    const a = random() * 6.28, d = 450 + random() * 750;
+    orbs.push({ x: pl.x + cos(a) * d, y: pl.y + sin(a) * d, vx: 0, vy: 0, p: random() * 6 });
   }
   for (const o of orbs) {
     o.p += s * 4;
     if (o.v && (o.l -= s) <= 0) o.got = true;
-    const dx = pl.x - o.x, dy = pl.y - o.y, d = Math.hypot(dx, dy);
+    const dx = pl.x - o.x, dy = pl.y - o.y, d = hypot(dx, dy);
     // Cerca del jugador vuelan hacia él (imán).
     // Con el imán activo, todos los puntos cercanos vuelan hacia ti.
     if (d < (st.mg > 0 ? 900 : MAG) && !st.dead) {
@@ -854,10 +860,10 @@ function updateOrbs(s) {
 
 // Suelta n puntos que salen disparados desde (x, y); v marca que vienen de un enemigo.
 function drop(x, y, n) {
-  if (Math.random() < 0.035) spawnItem(x, y);
+  if (random() < 0.035) spawnItem(x, y);
   for (let i = 0; i < n; i++) {
-    const a = Math.random() * 6.28, v = 80 + Math.random() * 120;
-    orbs.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, p: 0, v: 1, l: OL + Math.random() });
+    const a = random() * 6.28, v = 80 + random() * 120;
+    orbs.push({ x, y, vx: cos(a) * v, vy: sin(a) * v, p: 0, v: 1, l: OL + random() });
   }
 }
 
@@ -917,7 +923,7 @@ function restart() {
 
 function fade(s) {
   for (const [key, v] of lv) {
-    for (let i = 0; i < 3; i++) v[i] = Math.max(0, v[i] - s * 0.35);
+    for (let i = 0; i < 3; i++) v[i] = max(0, v[i] - s * 0.35);
     if (!(v[0] + v[1] + v[2])) lv.delete(key);
   }
 }
@@ -928,7 +934,7 @@ function nb(ac) {
   if (!nbuf) {
     nbuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = nbuf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    for (let i = 0; i < d.length; i++) d[i] = random() * 2 - 1;
   }
   return nbuf;
 }
@@ -987,7 +993,7 @@ const sfx = {
   buy: () => [660, 880, 1320].forEach((f, i) => setTimeout(() => tone(f, f * 1.01, 0.1, 'square', 0.05), i * 60)),
   hit: () => tone(1800, 900, 0.05, 'square', 0.04),
   eshoot: () => tone(520, 180, 0.12, 'sawtooth', 0.04),
-  orb: () => tone(1100 + Math.random() * 300, 1800, 0.07, 'sine', 0.06),
+  orb: () => tone(1100 + random() * 300, 1800, 0.07, 'sine', 0.06),
   lvl: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, f, 0.12, 'triangle', 0.07), i * 70)),
   // v: volumen relativo (las explosiones chicas suenan más suave)
   boom: (v) => {
@@ -998,15 +1004,15 @@ const sfx = {
 
 // Puntos locales [[x, y], ...] rotados según o.a y trasladados a (o.x, o.y).
 function shape(o, pts) {
-  const c = Math.cos(o.a), s = Math.sin(o.a);
+  const c = cos(o.a), s = sin(o.a);
   return pts.map(([x, y]) => ({ x: o.x + x * c - y * s, y: o.y + x * s + y * c }));
 }
 
 function sqPts(x, y, h, a) {
   const p = [];
   for (let k = 0; k < 4; k++) {
-    const t = a + Math.PI / 4 + (k * Math.PI) / 2;
-    p.push({ x: x + Math.cos(t) * h * Math.SQRT2, y: y + Math.sin(t) * h * Math.SQRT2 });
+    const t = a + PI / 4 + (k * PI) / 2;
+    p.push({ x: x + cos(t) * h * Math.SQRT2, y: y + sin(t) * h * Math.SQRT2 });
   }
   return p;
 }
@@ -1016,8 +1022,8 @@ function drawFoes() {
   // Puntos: esfera azul con núcleo claro que late suave.
   for (const o of orbs) {
     // Al final de su vida parpadea cada vez más rápido antes de desaparecer.
-    if (o.v && o.l < 2 && Math.sin(o.l * (14 - o.l * 4)) < 0) continue;
-    const k = 1 + Math.sin(o.p) * 0.15;
+    if (o.v && o.l < 2 && sin(o.l * (14 - o.l * 4)) < 0) continue;
+    const k = 1 + sin(o.p) * 0.15;
     gE.fillStyle(OB, 0.07);
     gE.fillCircle(o.x, o.y, 18 * k);
     gE.fillStyle(OB, 0.15);
@@ -1032,14 +1038,14 @@ function drawFoes() {
     if (e.t > 0) {
       // Zona de peligro: círculo amarillo que se intensifica y late cada vez más rápido.
       const q = 1 - e.t / ARM;
-      const pulse = 0.5 + 0.5 * Math.sin(q * q * 40);
+      const pulse = 0.5 + 0.5 * sin(q * q * 40);
       gE.fillStyle(YEL, 0.05 + q * 0.2 * pulse);
       gE.fillCircle(x, y, BR);
       gE.lineStyle(2, RED, 0.3 + q * 0.6);
       gE.strokeCircle(x, y, BR);
       const amp = 1 + q * 5;
-      x += (Math.random() - 0.5) * 2 * amp;
-      y += (Math.random() - 0.5) * 2 * amp;
+      x += (random() - 0.5) * 2 * amp;
+      y += (random() - 0.5) * 2 * amp;
     }
     const s1 = sqPts(x, y, 13, e.a);
     const s2 = sqPts(x + 6, y + 5, 13, e.a + 0.35);
@@ -1066,7 +1072,7 @@ function drawFoes() {
     for (const e of k.s) {
       const c = e.hf > 0 ? 0xffffff : GRN;
       const t1 = shape({ x: e.x - 1.5, y: e.y - 1, a: e.a }, [[13, 0], [-6.5, -11.3], [-6.5, 11.3], [13, 0]]);
-      const t2 = shape({ x: e.x + 1.5, y: e.y + 1, a: e.a + Math.PI }, [[13, 0], [-6.5, -11.3], [-6.5, 11.3], [13, 0]]);
+      const t2 = shape({ x: e.x + 1.5, y: e.y + 1, a: e.a + PI }, [[13, 0], [-6.5, -11.3], [-6.5, 11.3], [13, 0]]);
       for (const [w, al] of [[9, 0.12], [4, 0.35], [1.5, 1]]) {
         gE.lineStyle(w, w > 2 ? c : 0xeaffd8, al);
         gE.strokePoints(t1, false);
@@ -1076,17 +1082,17 @@ function drawFoes() {
   }
   // Mina: anillo rojo del área de daño, y tres triángulos que vibran cada vez más.
   for (const e of mines) {
-    const q = Math.min(1, e.t / FUSE), in_ = Math.min(1, e.t / 0.25);
-    const pulse = 0.6 + 0.4 * Math.sin(q * q * 50);
+    const q = min(1, e.t / FUSE), in_ = min(1, e.t / 0.25);
+    const pulse = 0.6 + 0.4 * sin(q * q * 50);
     for (const [w, al] of [[16, 0.12], [6, 0.3], [2, 0.9]]) {
       gE.lineStyle(w, MC, al * in_ * pulse);
       gE.strokeCircle(e.x, e.y, MR * (0.6 + 0.4 * in_));
     }
     const amp = 1 + q * 6, c = e.hf > 0 ? 0xffffff : MC;
     // Aparece girando rápido y frena en 0.6 s; luego gira lento y acelera justo antes de explotar.
-    const sp = Math.max(0, 1 - e.t / 0.6);
+    const sp = max(0, 1 - e.t / 0.6);
     const rot = 12 * sp * sp + 0.8 * e.t + 6 * q ** 4;
-    const o = { x: e.x + (Math.random() - 0.5) * 2 * amp, y: e.y + (Math.random() - 0.5) * 2 * amp, a: e.a + rot };
+    const o = { x: e.x + (random() - 0.5) * 2 * amp, y: e.y + (random() - 0.5) * 2 * amp, a: e.a + rot };
     const tri = (dx, dy, da) => shape({ x: o.x + dx, y: o.y + dy, a: o.a + da }, [[13 * in_, 0], [-8 * in_, -11 * in_], [-8 * in_, 11 * in_], [13 * in_, 0]]);
     const ts = [tri(-5, -3, 0), tri(5, 2, 0.15), tri(-1, 6, -0.2)];
     for (const [w, al] of [[9, 0.12], [4, 0.35], [1.5, 1]]) {
@@ -1096,7 +1102,7 @@ function drawFoes() {
   }
   // Aviso de oleada: línea tenue por donde pasará el carril y flechas que parpadean en el borde.
   for (const l of lanes) {
-    const ux = Math.cos(l.a), uy = Math.sin(l.a), on = (l.t * 8) & 1;
+    const ux = cos(l.a), uy = sin(l.a), on = (l.t * 8) & 1;
     gE.lineStyle(2, DB, 0.25);
     gE.lineBetween(l.x, l.y, l.x + ux * 1000, l.y + uy * 1000);
     if (on) {
@@ -1127,7 +1133,7 @@ function drawFoes() {
     const bl = [];
     for (let i = 0; i < 5; i++) {
       const t = (i * 6.28) / 5;
-      const p = (r, u) => [Math.cos(t + u) * r, Math.sin(t + u) * r];
+      const p = (r, u) => [cos(t + u) * r, sin(t + u) * r];
       bl.push(shape(e, [p(4, 0), p(SR, 0), p(SR * 0.75, 0.95), p(4, 0)]));
     }
     for (const [w, al] of [[9, 0.12], [4, 0.35], [1.5, 1]]) {
@@ -1160,7 +1166,7 @@ function drawFoes() {
     gE.fillCircle(b.x, b.y, 2.5);
   }
   for (const p of bits) {
-    gE.lineStyle(2, p.c, Math.min(1, p.t * 2));
+    gE.lineStyle(2, p.c, min(1, p.t * 2));
     gE.lineBetween(p.x, p.y, p.x - p.vx * 0.03, p.y - p.vy * 0.03);
   }
 }
@@ -1169,15 +1175,15 @@ function drawFoes() {
 // Con flat, la luz es pareja dentro de todo el radio en vez de apagarse hacia el borde.
 function light(x, y, R, m, c = 0xffffff, flat) {
   const k = [(c >> 16) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
-  const c0 = Math.ceil((x - R) / CS), c1 = Math.floor((x + R) / CS);
-  const r0 = Math.ceil((y - R) / CS), r1 = Math.floor((y + R) / CS);
+  const c0 = ceil((x - R) / CS), c1 = floor((x + R) / CS);
+  const r0 = ceil((y - R) / CS), r1 = floor((y + R) / CS);
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
-      const d = Math.hypot(c * CS - x, r * CS - y) / R;
+      const d = hypot(c * CS - x, r * CS - y) / R;
       if (d >= 1) continue;
       const f = flat ? m : (1 - d) * (1 - d) * m, key = c + ',' + r;
       const v = lv.get(key) || [0, 0, 0];
-      for (let i = 0; i < 3; i++) v[i] = Math.max(v[i], f * k[i]);
+      for (let i = 0; i < 3; i++) v[i] = max(v[i], f * k[i]);
       lv.set(key, v);
     }
   }
@@ -1202,7 +1208,7 @@ function drawStars() {
 // Segmento entre dos vértices con luz a y b: toma el color promedio y su brillo.
 function seg(x1, y1, x2, y2, a, b, maj) {
   const r = (a[0] + b[0]) / 2, g = (a[1] + b[1]) / 2, bl = (a[2] + b[2]) / 2;
-  const v = Math.max(r, g, bl);
+  const v = max(r, g, bl);
   const al = DARK + v * (maj ? 0.85 : 0.45);
   const c = v ? ((255 * r / v) << 16) | ((255 * g / v) << 8) | (255 * bl / v) : 0xffffff;
   if (v > 0.05) {
@@ -1216,8 +1222,8 @@ function seg(x1, y1, x2, y2, a, b, maj) {
 // Solo se dibujan las líneas visibles; la grilla se repite sin fin.
 function drawGrid() {
   gG.clear();
-  const c0 = Math.floor((cx - W / 2) / CS), c1 = Math.ceil((cx + W / 2) / CS);
-  const r0 = Math.floor((cy - H / 2) / CS), r1 = Math.ceil((cy + H / 2) / CS);
+  const c0 = floor((cx - W / 2) / CS), c1 = ceil((cx + W / 2) / CS);
+  const r0 = floor((cy - H / 2) / CS), r1 = ceil((cy + H / 2) / CS);
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
       const x = c * CS, y = r * CS, v = L(c, r);
@@ -1230,8 +1236,8 @@ function drawGrid() {
 function hexPts(x, y, r, a) {
   const p = [];
   for (let k = 0; k < 6; k++) {
-    const t = a + (k * Math.PI) / 3;
-    p.push({ x: x + Math.cos(t) * r, y: y + Math.sin(t) * r });
+    const t = a + (k * PI) / 3;
+    p.push({ x: x + cos(t) * r, y: y + sin(t) * r });
   }
   return p;
 }
@@ -1249,7 +1255,7 @@ function drawPlayer() {
   if (pl.dc > 0 && !st.dead && !menu) {
     gP.lineStyle(2, HC, 0.45);
     gP.beginPath();
-    gP.arc(pl.x, pl.y, pl.r + 12, -Math.PI / 2, -Math.PI / 2 + 6.283 * (1 - pl.dc / DCD));
+    gP.arc(pl.x, pl.y, pl.r + 12, -PI / 2, -PI / 2 + 6.283 * (1 - pl.dc / DCD));
     gP.strokePath();
   }
   if (!st.dead && !(st.inv > 0 && (st.inv * 12) & 1)) drawShip();
@@ -1265,13 +1271,13 @@ function drawPlayer() {
 
 function drawShip() {
   // El hexágono gira solo; la flecha de afuera marca la dirección de disparo.
-  const f = pl.f, ux = Math.cos(f), uy = Math.sin(f);
+  const f = pl.f, ux = cos(f), uy = sin(f);
   const o = hexPts(pl.x, pl.y, pl.r, pl.a);
   const tip = { x: pl.x + ux * (pl.r + 8), y: pl.y + uy * (pl.r + 8) };
   const arr = [
-    { x: pl.x + Math.cos(f - 0.2) * (pl.r + 4), y: pl.y + Math.sin(f - 0.2) * (pl.r + 4) },
+    { x: pl.x + cos(f - 0.2) * (pl.r + 4), y: pl.y + sin(f - 0.2) * (pl.r + 4) },
     tip,
-    { x: pl.x + Math.cos(f + 0.2) * (pl.r + 4), y: pl.y + Math.sin(f + 0.2) * (pl.r + 4) },
+    { x: pl.x + cos(f + 0.2) * (pl.r + 4), y: pl.y + sin(f + 0.2) * (pl.r + 4) },
   ];
   for (const [w, al] of [[14, 0.06], [8, 0.12], [4, 0.35], [2, 1]]) {
     gP.lineStyle(w, w > 2 ? 0xfff2d0 : 0xffffff, al);
@@ -1285,14 +1291,14 @@ function drawShip() {
 
 // ---------- HUD holográfico ----------
 const HB = 0x2a8cff, HC = 0x5fd8ff; // azul base, cian brillante
-const cm = () => Math.min(8, 1 + ((st.cb / 5) | 0)); // multiplicador de puntos del combo
-const need = () => Math.round(150 * st.lvl ** 1.5); // XP para el siguiente nivel: 150, 424, 779, 1200...
+const cm = () => min(8, 1 + ((st.cb / 5) | 0)); // multiplicador de puntos del combo
+const need = () => round(150 * st.lvl ** 1.5); // XP para el siguiente nivel: 150, 424, 779, 1200...
 
 // Suma XP y créditos por enemigo destruido; sube de nivel al llenar la barra.
 function reward(xp, cr) {
   // La barra se llena hasta el tope: eliges un powerup gratis y aparece el jefe.
   // El nivel sube al vencerlo.
-  st.xp = Math.min(need(), st.xp + xp);
+  st.xp = min(need(), st.xp + xp);
   st.cr += cr;
   // Combo: cada destrucción dentro de 2.5 s lo alarga; cada 5 sube el multiplicador (hasta x8).
   const m0 = cm();
@@ -1362,23 +1368,23 @@ function segs(x0, x1, y, n, al) {
   const w = (x1 - x0) / n;
   for (let i = 0; i < n; i++) {
     gH.fillStyle(HB, al * (1 - i / (n + 1)));
-    gH.fillRect(x0 + i * w + (x1 < x0 ? w : 0), y, Math.abs(w) - 3, 3);
+    gH.fillRect(x0 + i * w + (x1 < x0 ? w : 0), y, abs(w) - 3, 3);
   }
 }
 
 function drawHud() {
   gH.clear();
   // Parpadeo holográfico ocasional.
-  const fl = Math.random() < 0.03 ? 0.6 : 0.95;
+  const fl = random() < 0.03 ? 0.6 : 0.95;
   gH.setAlpha(fl);
   for (const t of [tLvl, tTime, tScore, tCr]) t.setAlpha(fl);
-  tOver.setAlpha(0.75 + 0.25 * Math.sin(st.dead * 6));
+  tOver.setAlpha(0.75 + 0.25 * sin(st.dead * 6));
 
   // Izquierda: rayo, barra de experiencia que se afina hacia el centro, y nivel.
   segs(34, 124, 22, 4, 0.9);
   band(70, 300, 42, 22, 8, HB, 0.4, 0);
   band(84, 280, 42, 6, 3, HB, 0.25, 0.05);
-  band(84, 84 + 196 * Math.min(1, st.xp / need()), 42, 6, 6 - 3 * Math.min(1, st.xp / need()), HC, 1, 0.8);
+  band(84, 84 + 196 * min(1, st.xp / need()), 42, 6, 6 - 3 * min(1, st.xp / need()), HC, 1, 0.8);
   segs(250, 300, 56, 4, 0.6);
   const bolt = [[3, -16], [-9, 3], [-1, 3], [-4, 16], [9, -3], [1, -3], [5, -16]].map(([x, y]) => ({ x: 52 + x, y: 46 + y }));
   for (const [w, al] of [[10, 0.15], [4, 0.4]]) {
@@ -1413,7 +1419,7 @@ function drawHud() {
   gH.fillStyle(HB, 0.3);
   gH.fillRect(598, 56, 118, 4);
   gH.fillStyle(st.hf > 0 ? 0xffffff : st.sh < 0.3 ? 0xff3c5a : HC, 0.95);
-  gH.fillRect(598, 56, 118 * Math.max(0, st.sh), 4);
+  gH.fillRect(598, 56, 118 * max(0, st.sh), 4);
   tCr.setText('CRÉDITOS ' + st.cr);
 
   drawBossHud();
@@ -1423,7 +1429,7 @@ function drawHud() {
     const m = cm();
     tCombo.setText('COMBO ' + st.cb + (m > 1 ? '   x' + m : '')).setColor(m > 1 ? '#ffb02e' : '#bfe9ff');
     gH.fillStyle(m > 1 ? ORA : HC, 0.85);
-    gH.fillRect(W / 2 - 50, 94, 100 * Math.max(0, st.ct / 2.5), 2);
+    gH.fillRect(W / 2 - 50, 94, 100 * max(0, st.ct / 2.5), 2);
   }
 
   // Abajo a la izquierda: powerups que tienes, en hexágonos con su nivel en 4 marcas.
@@ -1433,7 +1439,7 @@ function drawHud() {
   own.forEach((i, j) => {
     const x = 42 + j * 56, y = 556, nw = st.pf && st.pf[0] == i && st.pf[1] > 0;
     const c = nw && (st.pf[1] * 6) & 1 ? 0xff3cf0 : HC;
-    const hx = hexPts(x, y, 20, Math.PI / 6);
+    const hx = hexPts(x, y, 20, PI / 6);
     gH.fillStyle(0x0b0c24, 0.8);
     gH.fillPoints(hx, true);
     gH.lineStyle(2, c, 0.9);
@@ -1451,8 +1457,8 @@ function heart(x, y, k) {
   for (let i = 0; i < 24; i++) {
     const t = (i / 24) * 6.28;
     p.push({
-      x: x + 16 * Math.sin(t) ** 3 * k,
-      y: y - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * k,
+      x: x + 16 * sin(t) ** 3 * k,
+      y: y - (13 * cos(t) - 5 * cos(2 * t) - 2 * cos(3 * t) - cos(4 * t)) * k,
     });
   }
   return p;
@@ -1469,13 +1475,13 @@ const PW = [
 ];
 const price = (i) => PW[i].c * (st.pw[i] + 1);
 // Rayo frontal: hacia donde apuntas. Cruz: 4 rayos que giran con el hexágono.
-const beamAngles = (b) => (b.k ? [0, 1, 2, 3].map((i) => pl.a + (i * Math.PI) / 2) : [pl.f]);
+const beamAngles = (b) => (b.k ? [0, 1, 2, 3].map((i) => pl.a + (i * PI) / 2) : [pl.f]);
 
 function drones() {
-  const n = Math.min(st.pw[4], 3), r = [];
+  const n = min(st.pw[4], 3), r = [];
   for (let i = 0; i < n; i++) {
     const a = drA + (i * 6.28) / n;
-    r.push({ x: pl.x + Math.cos(a) * 48, y: pl.y + Math.sin(a) * 48, a });
+    r.push({ x: pl.x + cos(a) * 48, y: pl.y + sin(a) * 48, a });
   }
   return r;
 }
@@ -1508,7 +1514,7 @@ function hitEnemy(e, k) {
 function nearest(x, y, md) {
   let best = null;
   for (const t of tg) {
-    const d = Math.hypot(t.e.x - x, t.e.y - y);
+    const d = hypot(t.e.x - x, t.e.y - y);
     if (!t.e.dead && d < md) md = d, best = t.e;
   }
   return best;
@@ -1535,10 +1541,10 @@ function updatePowers(s) {
     if ((b.tick -= s) > 0) continue;
     b.tick = 0.1;
     for (const a of beamAngles(b)) {
-      const ux = Math.cos(a), uy = Math.sin(a);
+      const ux = cos(a), uy = sin(a);
       for (const t of tg) {
         const px = t.e.x - pl.x, py = t.e.y - pl.y, al = px * ux + py * uy;
-        if (al > 0 && al < b.len && Math.abs(px * uy - py * ux) < b.w / 2 + 12) hitEnemy(t.e, t.k);
+        if (al > 0 && al < b.len && abs(px * uy - py * ux) < b.w / 2 + 12) hitEnemy(t.e, t.k);
       }
     }
   }
@@ -1549,7 +1555,7 @@ function updatePowers(s) {
     pwt[2] = 3.2 - 0.3 * L[2];
     for (let i = 0; i < L[2]; i++) {
       const a = pl.f + (i - (L[2] - 1) / 2) * 0.5;
-      shots.push({ x: pl.x, y: pl.y, vx: Math.cos(a) * 380, vy: Math.sin(a) * 380, t: 3, h: 1, c: ORA });
+      shots.push({ x: pl.x, y: pl.y, vx: cos(a) * 380, vy: sin(a) * 380, t: 3, h: 1, c: ORA });
     }
     sfx.missile();
   }
@@ -1557,10 +1563,10 @@ function updatePowers(s) {
     if (!b.h) continue;
     const e = nearest(b.x, b.y, 500);
     if (!e) continue;
-    const v = Math.hypot(b.vx, b.vy);
-    const a = Phaser.Math.Angle.RotateTo(Math.atan2(b.vy, b.vx), Math.atan2(e.y - b.y, e.x - b.x), s * 5);
-    b.vx = Math.cos(a) * v;
-    b.vy = Math.sin(a) * v;
+    const v = hypot(b.vx, b.vy);
+    const a = rotTo(atan2(b.vy, b.vx), atan2(e.y - b.y, e.x - b.x), s * 5);
+    b.vx = cos(a) * v;
+    b.vy = sin(a) * v;
   }
 
   // Espiral: L brazos que disparan mientras el ángulo avanza.
@@ -1569,7 +1575,7 @@ function updatePowers(s) {
     spA += 0.45;
     for (let i = 0; i < L[3]; i++) {
       const a = spA + (i * 6.28) / L[3];
-      shots.push({ x: pl.x + Math.cos(a) * pl.r, y: pl.y + Math.sin(a) * pl.r, vx: Math.cos(a) * 420, vy: Math.sin(a) * 420, t: 0.9, c: PNK });
+      shots.push({ x: pl.x + cos(a) * pl.r, y: pl.y + sin(a) * pl.r, vx: cos(a) * 420, vy: sin(a) * 420, t: 0.9, c: PNK });
     }
   }
 
@@ -1580,8 +1586,8 @@ function updatePowers(s) {
     for (const d of drones()) {
       const e = nearest(d.x, d.y, 420);
       if (!e) continue;
-      const a = Math.atan2(e.y - d.y, e.x - d.x);
-      shots.push({ x: d.x, y: d.y, vx: Math.cos(a) * 600, vy: Math.sin(a) * 600, t: 0.8, c: HC });
+      const a = atan2(e.y - d.y, e.x - d.x);
+      shots.push({ x: d.x, y: d.y, vx: cos(a) * 600, vy: sin(a) * 600, t: 0.8, c: HC });
     }
   }
 }
@@ -1589,18 +1595,18 @@ function updatePowers(s) {
 function drawPowers() {
   // Rayo magenta con núcleo blanco y nubes de energía a lo largo; se apaga al final.
   for (const b of beams) {
-    const fa = Math.min(1, b.t * 6);
+    const fa = min(1, b.t * 6);
     for (const a of beamAngles(b)) {
-      const ux = Math.cos(a), uy = Math.sin(a);
+      const ux = cos(a), uy = sin(a);
       const x0 = pl.x + ux * pl.r, y0 = pl.y + uy * pl.r, x1 = pl.x + ux * b.len, y1 = pl.y + uy * b.len;
       for (const [w, c, al] of [[b.w * 2.4, PNK, 0.12], [b.w * 1.5, PNK, 0.25], [b.w, 0xff7ae8, 0.5], [b.w * 0.35, 0xffffff, 0.9]]) {
         gP.lineStyle(w, c, al * fa);
         gP.lineBetween(x0, y0, x1, y1);
       }
       for (let i = 0; i < 10; i++) {
-        const k = pl.r + Math.random() * (b.len - pl.r);
+        const k = pl.r + random() * (b.len - pl.r);
         gP.fillStyle(PNK, 0.15 * fa);
-        gP.fillCircle(pl.x + ux * k + (Math.random() - 0.5) * b.w, pl.y + uy * k + (Math.random() - 0.5) * b.w, b.w * (0.6 + Math.random() * 0.6));
+        gP.fillCircle(pl.x + ux * k + (random() - 0.5) * b.w, pl.y + uy * k + (random() - 0.5) * b.w, b.w * (0.6 + random() * 0.6));
       }
     }
   }
@@ -1679,7 +1685,7 @@ function drawShop() {
       g.strokePoints(fr, true);
     }
     // Ícono en un hexágono sobre el borde superior.
-    const hx = hexPts(cx, y0, 24, Math.PI / 6);
+    const hx = hexPts(cx, y0, 24, PI / 6);
     g.fillStyle(0x0b0c24, 1);
     g.fillPoints(hx, true);
     g.lineStyle(3, col, dim);
@@ -1712,13 +1718,13 @@ function icon(g, i, x, y, z = 1) {
     g.strokeCircle(x, y, 7 * z);
     for (let k = 0; k < 6; k++) {
       const a = k * 1.047;
-      L(Math.cos(a) * 10, Math.sin(a) * 10, Math.cos(a + 0.5) * 14, Math.sin(a + 0.5) * 14);
+      L(cos(a) * 10, sin(a) * 10, cos(a + 0.5) * 14, sin(a + 0.5) * 14);
     }
   } else {
     g.fillStyle(0xffffff, 1);
     g.fillCircle(x, y, 3 * z);
     g.strokeCircle(x, y, 11 * z);
-    for (let k = 0; k < 3; k++) g.fillCircle(x + Math.cos(k * 2.09) * 11 * z, y + Math.sin(k * 2.09) * 11 * z, 3 * z);
+    for (let k = 0; k < 3; k++) g.fillCircle(x + cos(k * 2.09) * 11 * z, y + sin(k * 2.09) * 11 * z, 3 * z);
   }
 }
 
@@ -1787,8 +1793,8 @@ function updateMenu(scene, s) {
   cy += 18 * s;
   scene.cameras.main.setScroll(cx - W / 2, cy - H / 2);
   // El hexágono recorre una curva de Lissajous y apunta hacia donde va.
-  const px = cx + Math.cos(mT * 0.45) * 300, py = cy + Math.sin(mT * 0.7) * 190;
-  if (Math.hypot(px - pl.x, py - pl.y) > 0.5) pl.f = Math.atan2(py - pl.y, px - pl.x);
+  const px = cx + cos(mT * 0.45) * 300, py = cy + sin(mT * 0.7) * 190;
+  if (hypot(px - pl.x, py - pl.y) > 0.5) pl.f = atan2(py - pl.y, px - pl.x);
   pl.x = px;
   pl.y = py;
   pl.a += s * 0.6;
@@ -1797,7 +1803,7 @@ function updateMenu(scene, s) {
   gE.clear();
   ML.forEach((c, i) => {
     const q = mT * (0.3 + i * 0.07) + i * 1.3;
-    const x = cx + Math.cos(q * 1.3) * (180 + i * 40), y = cy + Math.sin(q) * (120 + i * 25);
+    const x = cx + cos(q * 1.3) * (180 + i * 40), y = cy + sin(q) * (120 + i * 25);
     light(x, y, 80, 0.6, c);
     for (const [r, al] of [[14, 0.12], [8, 0.3], [3, 1]]) {
       gE.fillStyle(r > 3 ? c : 0xffffff, al);
@@ -1809,9 +1815,9 @@ function updateMenu(scene, s) {
   drawPlayer();
   // Fondo del título: bandas que se afinan hacia los lados y parpadeo holográfico.
   gH.clear();
-  const fl = Math.random() < 0.04 ? 0.55 : 1;
+  const fl = random() < 0.04 ? 0.55 : 1;
   gH.setAlpha(fl);
-  tMenu.go.setAlpha(0.35 + 0.65 * Math.abs(Math.sin(mT * 2.5)));
+  tMenu.go.setAlpha(0.35 + 0.65 * abs(sin(mT * 2.5)));
   // Cada 14 segundos alterna sola entre el título y la tabla (si hay puntajes).
   const sb = mB || (board.length && mT % 14 > 8);
   tMenu.best.setText(mB ? '[2]  VOLVER' : 'RÉCORD ' + String(best).padStart(6, '0') + '      [2]  PUNTAJES');
@@ -1823,7 +1829,7 @@ function updateMenu(scene, s) {
   band(W / 2, W / 2 + 260, 236, 3, 1, HC, 0.9, 0);
   band(W / 2, W / 2 - 260, 236, 3, 1, HC, 0.9, 0);
   // Glitch: de vez en cuando las capas de color se separan más.
-  const g = Math.random() < 0.05 ? 9 : 3;
+  const g = random() < 0.05 ? 9 : 3;
   tMenu.r.setPosition(W / 2 - g, 190).setAlpha(0.7 * fl);
   tMenu.c.setPosition(W / 2 + g, 190).setAlpha(0.7 * fl);
   tMenu.t.setAlpha(fl);
@@ -1879,7 +1885,7 @@ function vo(ac, at, type, f0, f1, dur, vol, fc, q) {
     const f = ac.createBiquadFilter();
     f.Q.value = q;
     f.frequency.setValueAtTime(fc, at);
-    f.frequency.exponentialRampToValueAtTime(Math.max(90, fc / 5), at + dur);
+    f.frequency.exponentialRampToValueAtTime(max(90, fc / 5), at + dur);
     n = o.connect(f);
   }
   n.connect(g).connect(mus.d);
@@ -1896,13 +1902,13 @@ function nz(ac, at, dur, vol, type, fc) {
   g.gain.setValueAtTime(vol, at);
   g.gain.exponentialRampToValueAtTime(0.001, at + dur);
   n.connect(f).connect(g).connect(mus.d);
-  n.start(at, Math.random() * 0.5);
+  n.start(at, random() * 0.5);
   n.stop(at + dur);
 }
 
 function beat(ac, n, at) {
   const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], L = menu ? 0 : st.lvl + (boss ? 3 : 0);
-  STEP = 60 / (148 + Math.min(16, Math.max(0, L - 5) * 2)) / 4;
+  STEP = 60 / (148 + min(16, max(0, L - 5) * 2)) / 4;
   if (s % 4 == 0) {
     // Bombo: va directo a la salida y agacha el resto (efecto "sidechain" que bombea).
     const o = ac.createOscillator(), g = ac.createGain();
@@ -1917,7 +1923,7 @@ function beat(ac, n, at) {
     mus.d.gain.linearRampToValueAtTime(1, at + STEP * 3);
   } else {
     // Bajo ácido rodante: sierra con filtro resonante que se abre y se cierra cada 2 compases.
-    const fc = (350 + 1700 * (0.5 + 0.5 * Math.sin(n * 0.1))) * (1 + Math.min(L, 10) * 0.08);
+    const fc = (350 + 1700 * (0.5 + 0.5 * sin(n * 0.1))) * (1 + min(L, 10) * 0.08);
     const m = ch - 12 + (s % 4 == 3 ? 12 : 0);
     vo(ac, at, 'sawtooth', hz(m), hz(m), STEP * 0.95, 0.32, fc, 14);
   }
@@ -2002,7 +2008,7 @@ function updateEntry() {
   tEnt.setText(e.l.map((k) => ABC[k]).join('  ')).setVisible(true);
   tHint.setText('ARRIBA/ABAJO  LETRA     [1]  SIGUIENTE').setVisible(true);
   // Cada letra ocupa 3 caracteres de ancho (letra + 2 espacios): ~38 px a 64 px de fuente.
-  const x = W / 2 + (e.i - 1) * 115, k = 0.6 + 0.4 * Math.abs(Math.sin(st.dead * 5));
+  const x = W / 2 + (e.i - 1) * 115, k = 0.6 + 0.4 * abs(sin(st.dead * 5));
   gShop.lineStyle(3, 0xff3cf0, k);
   gShop.lineBetween(x - 22, 362, x + 22, 362);
   gShop.fillStyle(0xff3cf0, k);
@@ -2034,18 +2040,18 @@ function banner(t, sub, c) {
 }
 
 function spawnBoss() {
-  const k = st.bn % 3, a = Math.random() * 6.28, hp = 45 + st.bn * 25;
-  boss = { k, x: pl.x + Math.cos(a) * 520, y: pl.y + Math.sin(a) * 520, hp, mx: hp, a: 0, m: a + Math.PI, t: 2, c: 0, hf: 0, hc: 0, d: 0 };
+  const k = st.bn % 3, a = random() * 6.28, hp = 45 + st.bn * 25;
+  boss = { k, x: pl.x + cos(a) * 520, y: pl.y + sin(a) * 520, hp, mx: hp, a: 0, m: a + PI, t: 2, c: 0, hf: 0, hc: 0, d: 0 };
   if (k == 2) boss.s = Array.from({ length: 16 }, () => ({ x: boss.x, y: boss.y }));
   banner('¡JEFE!', BN[k], BC[k]);
   sfx.warn();
 }
 
 // Proyectil enemigo desde (x, y) en el ángulo a.
-const eb = (x, y, a, v, c) => eshots.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 4, c, d: 0.2 });
+const eb = (x, y, a, v, c) => eshots.push({ x, y, vx: cos(a) * v, vy: sin(a) * v, t: 4, c, d: 0.2 });
 
 // ¿El ángulo a choca con alguno de los tres escudos del núcleo?
-const shieldAt = (B, a) => [0, 1, 2].some((i) => Math.abs(Math.atan2(Math.sin(a - B.a * 1.4 - i * 2.09), Math.cos(a - B.a * 1.4 - i * 2.09))) < 0.65);
+const shieldAt = (B, a) => [0, 1, 2].some((i) => abs(atan2(sin(a - B.a * 1.4 - i * 2.09), cos(a - B.a * 1.4 - i * 2.09))) < 0.65);
 
 function hitBoss(n) {
   const B = boss;
@@ -2060,23 +2066,23 @@ function updateBoss(s) {
   const B = boss;
   if (!B) return;
   const T = (st.bn / 3) | 0, sp = spd(), R = BR2[B.k];
-  const px = pl.x - B.x, py = pl.y - B.y, d = Math.hypot(px, py), toP = Math.atan2(py, px);
+  const px = pl.x - B.x, py = pl.y - B.y, d = hypot(px, py), toP = atan2(py, px);
   B.a += s;
   B.hf -= s;
   B.hc -= s;
   // Muriendo: explosiones por todo el cuerpo y al final una enorme.
   if (B.d) {
-    if (Math.random() < s * 14) boom(B.x + (Math.random() - 0.5) * 140, B.y + (Math.random() - 0.5) * 140, 50, YEL, BC[B.k]);
+    if (random() < s * 14) boom(B.x + (random() - 0.5) * 140, B.y + (random() - 0.5) * 140, 50, YEL, BC[B.k]);
     if ((B.d -= s) <= 0) bossDown();
     return;
   }
   B.t -= s;
   if (B.k < 2) {
     // Se acerca hasta ~260 del jugador y lo rodea despacio.
-    const want = d > 300 ? toP : d < 220 ? toP + Math.PI : toP + Math.PI / 2;
-    B.m = Phaser.Math.Angle.RotateTo(B.m, want, s);
-    B.x += Math.cos(B.m) * 55 * sp * s;
-    B.y += Math.sin(B.m) * 55 * sp * s;
+    const want = d > 300 ? toP : d < 220 ? toP + PI : toP + PI / 2;
+    B.m = rotTo(B.m, want, s);
+    B.x += cos(B.m) * 55 * sp * s;
+    B.y += sin(B.m) * 55 * sp * s;
   }
   if (B.k == 0) {
     if (B.t <= 0) {
@@ -2101,8 +2107,8 @@ function updateBoss(s) {
     if (B.t <= 0) {
       if (B.c++ % 3 == 2) {
         for (let i = 0; i < 2 + T; i++) {
-          const a = Math.random() * 6.28, r = 120 + Math.random() * 120;
-          mines.push({ x: pl.x + Math.cos(a) * r, y: pl.y + Math.sin(a) * r, a: Math.random() * 6.28, t: 0, hp: 3, hf: 0, bp: 0.3 });
+          const a = random() * 6.28, r = 120 + random() * 120;
+          mines.push({ x: pl.x + cos(a) * r, y: pl.y + sin(a) * r, a: random() * 6.28, t: 0, hp: 3, hf: 0, bp: 0.3 });
         }
         sfx.mine();
         B.t = 2.4 / sp;
@@ -2126,13 +2132,13 @@ function updateBoss(s) {
       if (B.c == 1) sfx.warn();
       if (B.c == 2) sfx.dash();
     }
-    if (B.c < 2) B.m = Phaser.Math.Angle.RotateTo(B.m, toP + (B.c ? 0 : Math.sin(B.a * 3) * 0.6), s * (B.c ? 4 : 2));
+    if (B.c < 2) B.m = rotTo(B.m, toP + (B.c ? 0 : sin(B.a * 3) * 0.6), s * (B.c ? 4 : 2));
     const v = [130 * sp, 0, 640 * sp][B.c];
-    B.x += Math.cos(B.m) * v * s;
-    B.y += Math.sin(B.m) * v * s;
+    B.x += cos(B.m) * v * s;
+    B.y += sin(B.m) * v * s;
     let f = B;
     for (const g of B.s) {
-      const gd = Math.hypot(f.x - g.x, f.y - g.y);
+      const gd = hypot(f.x - g.x, f.y - g.y);
       if (gd > 30) {
         g.x = f.x - ((f.x - g.x) / gd) * 30;
         g.y = f.y - ((f.y - g.y) / gd) * 30;
@@ -2143,8 +2149,8 @@ function updateBoss(s) {
   // Disparos del jugador: los escudos del núcleo y el cuerpo del titán los frenan.
   for (const b of shots) {
     if (b.t <= 0) continue;
-    const dx = b.x - B.x, dy = b.y - B.y, r = Math.hypot(dx, dy);
-    if ((B.k == 1 && r > 38 && r < 62 && shieldAt(B, Math.atan2(dy, dx))) || (B.k == 2 && B.s.some((g) => Math.hypot(b.x - g.x, b.y - g.y) < 20))) b.t = 0;
+    const dx = b.x - B.x, dy = b.y - B.y, r = hypot(dx, dy);
+    if ((B.k == 1 && r > 38 && r < 62 && shieldAt(B, atan2(dy, dx))) || (B.k == 2 && B.s.some((g) => hypot(b.x - g.x, b.y - g.y) < 20))) b.t = 0;
     else if (r < R) {
       b.t = 0;
       hitBoss(1);
@@ -2152,7 +2158,7 @@ function updateBoss(s) {
   }
   shots = shots.filter((b) => b.t > 0);
   // Tocarlo daña, con una pausa antes de volver a dañar.
-  const touch = d < R + pl.r || (B.k == 2 && B.s.some((g) => Math.hypot(pl.x - g.x, pl.y - g.y) < 18 + pl.r));
+  const touch = d < R + pl.r || (B.k == 2 && B.s.some((g) => hypot(pl.x - g.x, pl.y - g.y) < 18 + pl.r));
   if (touch && B.hc <= 0 && !st.dead) {
     B.hc = 0.8;
     hurt(0.4);
@@ -2183,20 +2189,20 @@ function bossLight() {
   if (B.k == 2) {
     for (const g of B.s) light(g.x, g.y, 70, 0.4, c);
     // Línea de aviso antes de embestir, en rojo.
-    if (B.c == 1) for (let k = 60; k < 700; k += 60) light(B.x + Math.cos(B.m) * k, B.y + Math.sin(B.m) * k, 50, 0.6, RED);
+    if (B.c == 1) for (let k = 60; k < 700; k += 60) light(B.x + cos(B.m) * k, B.y + sin(B.m) * k, 50, 0.6, RED);
   }
 }
 
 function drawBoss() {
   const B = boss;
-  if (!B || (B.d && Math.random() < 0.3)) return;
+  if (!B || (B.d && random() < 0.3)) return;
   const c = B.hf > 0 ? 0xffffff : BC[B.k], ls = [];
   if (B.k == 0) {
     for (const [r, v] of [[62, 1], [44, -1.5], [26, 2]]) ls.push(hexPts(B.x, B.y, r, B.a * v));
   } else if (B.k == 1) {
     ls.push(hexPts(B.x, B.y, 28, B.a * 2), hexPts(B.x, B.y, 14, -B.a * 3));
   } else {
-    const u = Math.cos(B.m), w = Math.sin(B.m), P = (f, l) => ({ x: B.x + u * f - w * l, y: B.y + w * f + u * l });
+    const u = cos(B.m), w = sin(B.m), P = (f, l) => ({ x: B.x + u * f - w * l, y: B.y + w * f + u * l });
     ls.push([P(30, 0), P(-6, -24), P(-18, 0), P(-6, 24), P(30, 0)]);
     B.s.forEach((g, i) => ls.push(hexPts(g.x, g.y, 16 - i * 0.5, B.a * 2 + i)));
   }
@@ -2213,8 +2219,8 @@ function drawBoss() {
     }
   }
   if (B.k == 2 && B.c == 1) {
-    gE.lineStyle(2, RED, 0.5 + 0.5 * Math.sin(B.a * 30));
-    gE.lineBetween(B.x, B.y, B.x + Math.cos(B.m) * 700, B.y + Math.sin(B.m) * 700);
+    gE.lineStyle(2, RED, 0.5 + 0.5 * sin(B.a * 30));
+    gE.lineBetween(B.x, B.y, B.x + cos(B.m) * 700, B.y + sin(B.m) * 700);
   }
 }
 
@@ -2228,12 +2234,12 @@ function drawBossHud() {
     gH.fillStyle(HB, 0.3);
     gH.fillRect(250, 122, 300, 6);
     gH.fillStyle(B.hf > 0 ? 0xffffff : BC[B.k], 0.95);
-    gH.fillRect(250, 122, 300 * Math.max(0, B.hp / B.mx), 6);
+    gH.fillRect(250, 122, 300 * max(0, B.hp / B.mx), 6);
     const sx = B.x - cx + W / 2, sy = B.y - cy + H / 2;
     if (sx < 0 || sx > W || sy < 0 || sy > H) {
-      const a = Math.atan2(sy - H / 2, sx - W / 2), x = Phaser.Math.Clamp(sx, 30, W - 30), y = Phaser.Math.Clamp(sy, 120, H - 30);
-      gH.fillStyle(BC[B.k], 0.5 + 0.5 * Math.sin(B.a * 8));
-      gH.fillTriangle(x + Math.cos(a) * 14, y + Math.sin(a) * 14, x + Math.cos(a + 2.4) * 10, y + Math.sin(a + 2.4) * 10, x + Math.cos(a - 2.4) * 10, y + Math.sin(a - 2.4) * 10);
+      const a = atan2(sy - H / 2, sx - W / 2), x = clamp(sx, 30, W - 30), y = clamp(sy, 120, H - 30);
+      gH.fillStyle(BC[B.k], 0.5 + 0.5 * sin(B.a * 8));
+      gH.fillTriangle(x + cos(a) * 14, y + sin(a) * 14, x + cos(a + 2.4) * 10, y + sin(a + 2.4) * 10, x + cos(a - 2.4) * 10, y + sin(a - 2.4) * 10);
     }
   }
   const on = banT > 0;
@@ -2241,8 +2247,8 @@ function drawBossHud() {
   tBanS.setVisible(on);
   if (on) {
     // Entra grande y se asienta; tiembla un poco (glitch) y se desvanece al final.
-    const al = Math.min(1, banT * 2), g = Math.random() < 0.08 ? (Math.random() - 0.5) * 14 : 0;
-    tBan.setAlpha(al).setScale(1 + Math.max(0, banT - 2.3) * 2).setX(W / 2 + g);
+    const al = min(1, banT * 2), g = random() < 0.08 ? (random() - 0.5) * 14 : 0;
+    tBan.setAlpha(al).setScale(1 + max(0, banT - 2.3) * 2).setX(W / 2 + g);
     tBanS.setAlpha(al);
   }
 }
@@ -2255,30 +2261,30 @@ const IN = ['+1 VIDA', 'ESCUDO', '¡BOMBA!', 'IMÁN'];
 const IC = [0xff4f7a, HC, YEL, OB];
 
 function spawnItem(x, y) {
-  items.push({ x, y, k: (Math.random() * 4) | 0, t: 12, a: 0 });
+  items.push({ x, y, k: (random() * 4) | 0, t: 12, a: 0 });
 }
 
 function updateItems(s) {
   if (!boss && !st.dead && (itT -= s) <= 0) {
-    itT = 15 + Math.random() * 10;
-    const a = Math.random() * 6.28, d = 250 + Math.random() * 200;
-    spawnItem(pl.x + Math.cos(a) * d, pl.y + Math.sin(a) * d);
+    itT = 15 + random() * 10;
+    const a = random() * 6.28, d = 250 + random() * 200;
+    spawnItem(pl.x + cos(a) * d, pl.y + sin(a) * d);
   }
   for (const o of items) {
     o.t -= s;
     o.a += s * 2;
-    if (!st.dead && Math.hypot(o.x - pl.x, o.y - pl.y) < pl.r + 18) {
+    if (!st.dead && hypot(o.x - pl.x, o.y - pl.y) < pl.r + 18) {
       o.t = 0;
       takeItem(o);
     }
   }
   items = items.filter((o) => o.t > 0);
   if (tPop.visible && (tPop.t -= s) <= 0) tPop.setVisible(false);
-  if (tPop.visible) tPop.setPosition(pl.x, pl.y - 40 - (1 - tPop.t) * 30).setAlpha(Math.min(1, tPop.t * 2));
+  if (tPop.visible) tPop.setPosition(pl.x, pl.y - 40 - (1 - tPop.t) * 30).setAlpha(min(1, tPop.t * 2));
 }
 
 function takeItem(o) {
-  if (o.k == 0) st.hp = Math.min(5, st.hp + 1);
+  if (o.k == 0) st.hp = min(5, st.hp + 1);
   else if (o.k == 1) st.sh = 1;
   else if (o.k == 3) st.mg = 8;
   else {
@@ -2288,7 +2294,7 @@ function takeItem(o) {
     boom(pl.x, pl.y, 340, 0xffffff, YEL);
     targets();
     for (const t of tg) {
-      if (Math.hypot(t.e.x - pl.x, t.e.y - pl.y) > 340) continue;
+      if (hypot(t.e.x - pl.x, t.e.y - pl.y) > 340) continue;
       if (t.k == 6) hitBoss(10);
       else for (let i = 0; i < 5 && !t.e.dead; i++) hitEnemy(t.e, t.k);
     }
@@ -2301,10 +2307,10 @@ function takeItem(o) {
 
 function drawItems() {
   for (const o of items) {
-    if (o.t < 3 && Math.sin(o.t * 18) < 0) continue;
-    const c = IC[o.k], k = 1 + Math.sin(o.a * 2) * 0.08;
+    if (o.t < 3 && sin(o.t * 18) < 0) continue;
+    const c = IC[o.k], k = 1 + sin(o.a * 2) * 0.08;
     // Marco: rombo que gira, con el símbolo del objeto adentro.
-    const fr = [0, 1, 2, 3].map((i) => ({ x: o.x + Math.cos(o.a + i * 1.571) * 20 * k, y: o.y + Math.sin(o.a + i * 1.571) * 20 * k }));
+    const fr = [0, 1, 2, 3].map((i) => ({ x: o.x + cos(o.a + i * 1.571) * 20 * k, y: o.y + sin(o.a + i * 1.571) * 20 * k }));
     gE.fillStyle(c, 0.15);
     gE.fillPoints(fr, true);
     for (const [w, al] of [[8, 0.15], [3, 0.4], [1.5, 1]]) {
@@ -2320,10 +2326,11 @@ function drawItems() {
       gE.lineBetween(o.x + 3, o.y - 3, o.x + 7, o.y - 8);
     } else {
       gE.beginPath();
-      gE.arc(o.x, o.y - 2, 6, 0, Math.PI);
+      gE.arc(o.x, o.y - 2, 6, 0, PI);
       gE.strokePath();
       gE.lineBetween(o.x - 6, o.y - 2, o.x - 6, o.y - 7);
       gE.lineBetween(o.x + 6, o.y - 2, o.x + 6, o.y - 7);
     }
   }
 }
+})();
