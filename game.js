@@ -1874,7 +1874,7 @@ function createMenu(scene) {
   const tx = (y, size, col, sh) =>
     scene.add.text(W / 2, y, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: size, color: col, align: 'center' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(12).setShadow(0, 0, sh, 14, true, true);
-  // Logo "COMET SURVIVOR" con letras pixeladas de neón (ver drawLogo).
+  // Logo "COMET RUSH" con letras pixeladas de neón (ver drawLogo).
   gL = scene.add.graphics().setScrollFactor(0).setDepth(12);
   tMenu = {
     go: tx(390, 24, '#f2fbff', '#ff3cf0'),
@@ -1971,7 +1971,7 @@ function updateMenu(scene, s) {
 
 // Logo con letras pixeladas tipo arcade de 5×7: cada fila es un número de 5 bits escrito en
 // base 32 (un carácter por fila, de arriba a abajo).
-const FONT = { C: 'ehggghe', O: 'ehhhhhe', M: 'hrllhhh', E: 'vgguggv', T: 'v444444', S: 'fgge11u', U: 'hhhhhhe', R: 'uhhukih', V: 'hhhhha4', I: 'e44444e' };
+const FONT = { C: 'ehggghe', O: 'ehhhhhe', M: 'hrllhhh', E: 'vgguggv', T: 'v444444', S: 'fgge11u', U: 'hhhhhhe', R: 'uhhukih', H: 'hhhvhhh' };
 
 // Palabra centrada en x con su borde de arriba en y, píxeles de p de lado. Capas: halo de
 // neón, copias roja y azul desplazadas (aberración cromática), borde brillante, relleno
@@ -2016,7 +2016,7 @@ function pixWord(w, x, y, p, c, f, fl, g) {
 function drawLogo(fl) {
   const g = random() < 0.05 ? 7 : 3; // glitch: a veces las capas de color se separan más
   pixWord('COMET', W / 2, 92, 15, 0xff3cb4, 0xffd6f0, fl, g);
-  pixWord('SURVIVOR', W / 2, 222, 9, 0xffb21a, 0xfff2b8, fl, g);
+  pixWord('RUSH', W / 2, 214, 13, 0xffb21a, 0xfff2b8, fl, g);
 }
 
 // ---------- Música ----------
