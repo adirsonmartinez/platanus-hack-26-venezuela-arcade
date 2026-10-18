@@ -79,7 +79,6 @@ const config = {
   scene: { create, update },
 };
 
-new Phaser.Game(config);
 
 // Grilla infinita: celdas cuadradas de CS px. Cada 2 líneas, una es "mayor" (más brillante).
 const CS = 40;
@@ -97,11 +96,11 @@ let stars; // partículas de fondo con parallax
 let shots; // proyectiles {x, y, vx, vy, t}
 let foes; // enemigos {x, y, vx, vy, a, va, t}; t > 0 = cuenta regresiva para explotar
 let blasts; // explosiones {x, y, t, r, c (destello), k (anillo)}
-let snakes; // serpientes {s: segmentos [{x, y, a, hf}], m (rumbo de la cabeza), p (fase del zigzag), hc}
+let snakes; // serpientes {s: segmentos [{x, y, a}], m (rumbo de la cabeza), p (fase del zigzag), hc}
 let mines; // minas {x, y, a, t (segundos desde que apareció), hp, hf, bp (próximo pitido)}
 let mt; // segundos hasta la próxima mina
 let ft; // segundos hasta la próxima formación de cuadrados
-let dias; // diamantes de oleada {x, y, a (rumbo), d (distancia recorrida), w (oleada), hf}
+let dias; // diamantes de oleada {x, y, a (rumbo), d (distancia recorrida), w (oleada)}
 let lanes; // carriles anunciados antes de una oleada {x, y, a, t (segundos de aviso), w}
 let wt; // segundos hasta la próxima oleada
 let spins; // espirales {x, y, a, m (rumbo), hp, hf, hc (espera entre golpes al jugador)}
@@ -199,7 +198,6 @@ function create() {
     gP.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.4, 4);
   }
   sc = this;
-  st = { hp: 3, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   createHud(this);
   createMenu(this);
   try {
@@ -215,28 +213,9 @@ function create() {
   // a: giro del hexágono; f: ángulo del frente (hacia donde dispara); cd: enfriamiento del disparo
   // dt: tiempo de dash restante; dc: recarga del dash; vx, vy: dirección del dash; gh: estela
   pl = { x: 0, y: 0, r: 16, a: 0, f: -PI / 2, sp: 220, cd: 0, dt: 0, dc: 0, vx: 0, vy: 0, gh: [] };
-  shots = [];
-  foes = [];
-  blasts = [];
-  jets = [];
-  spins = [];
-  dias = [];
-  mines = [];
-  snakes = [];
-  beams = [];
-  pwt = [0, 0, 0, 0, 0];
-  drA = spA = 0;
-  mt = 10;
-  ft = 12;
-  lanes = [];
-  wt = 15;
-  eshots = [];
-  bits = [];
-  orbs = [];
-  items = [];
-  itT = 15;
-  ban = null;
-  banW = 35;
+  // Arranca en el menú: estado de partida nueva, sin la invulnerabilidad del comienzo.
+  restart();
+  st.inv = 0;
   cx = cy = 0;
   // z: cuánto se mueven con la cámara (más bajo = más lejos y más tenue)
   stars = [];
@@ -406,8 +385,8 @@ function update(_, dt) {
   for (const j of jets) light(j.x, j.y, 100, 0.55, JT[j.t].c);
   for (const e of spins) light(e.x, e.y, 110, 0.6, SPC);
   for (const e of dias) light(e.x, e.y, 70, 0.45, DB);
-  // Mina: toda su área de daño se tiñe de rojo, cada vez más fuerte.
   for (const k of snakes) for (const e of k.s) light(e.x, e.y, 70, 0.4, GRN);
+  // Mina: toda su área de daño se tiñe de rojo, cada vez más fuerte.
   for (const e of mines) light(e.x, e.y, MR, 0.25 + 0.6 * min(1, e.t / FUSE), MC, 1);
   for (const e of blasts) if (e.t < 0.3) light(e.x, e.y, e.r * 2.2, 1, e.k);
   for (const b of eshots) light(b.x, b.y, 60, 0.4, b.c);
@@ -713,7 +692,7 @@ function updateSnakes(s) {
   while (!boss && snakes.length < SNN + (dif() >> 2)) {
     const a = random() * 6.28, d = 700 + random() * 300, n = 4 + ((random() * (9 + dif())) | 0);
     const x = pl.x + cos(a) * d, y = pl.y + sin(a) * d, seg = [];
-    for (let i = 0; i < n; i++) seg.push({ x: x + cos(a) * i * SGAP, y: y + sin(a) * i * SGAP, a: 0, hf: 0 });
+    for (let i = 0; i < n; i++) seg.push({ x: x + cos(a) * i * SGAP, y: y + sin(a) * i * SGAP, a: 0 });
     snakes.push({ s: seg, m: a + PI, p: 0, hc: 0 });
   }
   const born = [];
@@ -737,7 +716,6 @@ function updateSnakes(s) {
     for (const e of k.s) {
       if (e.dead) continue; // ya destruido por una explosión
       e.a += s * 1.5;
-      e.hf -= s;
       for (const b of shots) {
         if (b.t > 0 && hypot(e.x - b.x, e.y - b.y) < 16) {
           b.t = 0;
@@ -827,7 +805,7 @@ function updateWaves(s) {
     // Fin del aviso: entra la fila de diamantes, uno detrás de otro.
     const ux = cos(l.a), uy = sin(l.a);
     for (let i = 0; i < DN; i++) {
-      dias.push({ x: l.x - ux * i * DGAP, y: l.y - uy * i * DGAP, a: l.a, d: -i * DGAP, w: l.w, hf: 0 });
+      dias.push({ x: l.x - ux * i * DGAP, y: l.y - uy * i * DGAP, a: l.a, d: -i * DGAP, w: l.w });
       l.w.n++;
     }
   }
@@ -939,6 +917,10 @@ function restart() {
   pl.br = pl.dt = pl.dc = 0;
   pl.gh = [];
   hs = zp = ch = chT = 0;
+  shots = [];
+  blasts = [];
+  bits = [];
+  orbs = [];
   st = { hp: 3, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   foes = [];
   jets = [];
@@ -1151,7 +1133,7 @@ function drawFoes() {
   // Serpiente: cada segmento es una estrella de seis puntas (dos triángulos algo desplazados).
   for (const k of snakes) {
     for (const e of k.s) {
-      const c = e.hf > 0 ? 0xffffff : GRN;
+      const c = GRN;
       const t1 = shape({ x: e.x - 1.5, y: e.y - 1, a: e.a }, [[13, 0], [-6.5, -11.3], [-6.5, 11.3], [13, 0]]);
       const t2 = shape({ x: e.x + 1.5, y: e.y + 1, a: e.a + PI }, [[13, 0], [-6.5, -11.3], [-6.5, 11.3], [13, 0]]);
       for (const [w, al] of [[9, 0.12], [4, 0.35], [1.5, 1]]) {
@@ -1302,7 +1284,7 @@ function seg(x1, y1, x2, y2, a, b, maj) {
   const v = max(r, g, bl);
   if (!v) return dk[maj ? 0 : 1].push(x1, y1, x2, y2);
   const al = DARK + v * (maj ? 0.85 : 0.45);
-  const c = v ? ((255 * r / v) << 16) | ((255 * g / v) << 8) | (255 * bl / v) : 0xffffff;
+  const c = ((255 * r / v) << 16) | ((255 * g / v) << 8) | (255 * bl / v);
   if (v > 0.05) {
     gG.lineStyle(maj ? 6 : 4, c, al * 0.15);
     gG.lineBetween(x1, y1, x2, y2);
@@ -1374,7 +1356,7 @@ function drawPlayer() {
   // Proyectiles: trazo corto en la dirección de vuelo, del color de quien los dispara.
   for (const b of shots) {
     for (const [w, al] of [[8, 0.15], [3, 0.5], [1.5, 1]]) {
-      gP.lineStyle(w, w > 2 ? b.c || 0xffffff : 0xffffff, al);
+      gP.lineStyle(w, w > 2 ? b.c : 0xffffff, al);
       gP.lineBetween(b.x - b.vx * 0.02, b.y - b.vy * 0.02, b.x, b.y);
     }
   }
@@ -1493,7 +1475,7 @@ function createHud(scene) {
   tBoard = st2(W / 2, 330, 18, '#f2fbff');
   tHint = st2(W / 2, 540, 15, '#bfe9ff', 780);
   tEnt = st2(W / 2, 236, 48, '#f2fbff');
-  // Teclado de iniciales: 10 columnas por 4 filas; BORRAR ocupa dos casillas.
+  // Teclado de iniciales: 10 columnas por 4 filas; DELETE ocupa dos casillas.
   tKeys = [...ABC, 'DELETE', 'OK'].map((k, i) => st2(KX(i < 37 ? i : i == 37 ? 37.5 : 39), KY(i < 37 ? i : 39), k.length > 2 ? 13 : 22, '#f2fbff').setText(k));
   tOver = scene.add.text(W / 2, 110, '', {
     fontFamily: 'monospace', fontStyle: 'bold', fontSize: 34, color: '#f2fbff', align: 'center',
@@ -1909,10 +1891,6 @@ function toMenu() {
   restart();
   bm = 0;
   st.inv = 0;
-  shots = [];
-  orbs = [];
-  bits = [];
-  blasts = [];
   menu = 1;
   mT = 0;
   // El menú no aplica el zoom de golpe: las capas vuelven a su tamaño normal.
@@ -2185,12 +2163,12 @@ function showOver() {
 }
 
 // Teclado de iniciales: casilla c (0..39) → pantalla. Las 37 primeras son letras y números,
-// 37–38 es BORRAR y 39 es OK.
+// 37–38 es DELETE y 39 es OK.
 const KX = (c) => W / 2 + ((c % 10) - 4.5) * 50;
 const KY = (c) => 318 + floor(c / 10) * 46;
 
 // Iniciales con teclado en pantalla: el joystick mueve el cursor (da la vuelta en los bordes),
-// [1] escribe la letra (o usa BORRAR / OK), [2] borra y START guarda. Al completar las tres
+// [1] escribe la letra (o usa DELETE / OK), [2] borra y START guarda. Al completar las tres
 // letras el cursor salta a OK.
 function updateEntry() {
   const e = ent;
@@ -2198,7 +2176,7 @@ function updateEntry() {
   if (dx || dy) {
     let c = e.c == 38 ? 37 : e.c;
     if (dx) c = floor(c / 10) * 10 + ((c % 10) + dx + 10) % 10;
-    // BORRAR mide dos casillas: hacia la derecha se salta la segunda.
+    // DELETE mide dos casillas: hacia la derecha se salta la segunda.
     if (c == 38) c = dx > 0 ? 39 : 37;
     if (dy) c = (c + dy * 10 + 40) % 40;
     e.c = c == 38 ? 37 : c;
@@ -2212,7 +2190,7 @@ function updateEntry() {
         if (e.n.length == 3) e.c = 39;
         sfx.beep();
       }
-    } else if (e.c == 37) e.n = e.n.slice(0, -1);
+    } else if (e.c == 37) e.n = e.n.slice(0, -1), sfx.beep();
     else ok = 1;
   }
   if (pressed.P1_2) e.n = e.n.slice(0, -1), sfx.beep();
@@ -2317,8 +2295,8 @@ function drawAlien(t) {
 }
 
 // ---------- Jefes ----------
-// Al llenar la barra de experiencia aparece un jefe y dejan de llegar enemigos nuevos; hay
-// que vencerlo para subir de nivel. Rotan tres jefes y en cada vuelta tienen más vida y
+// Al llenar la barra de experiencia aparece un jefe (siguen llegando cuadrados y aviones
+// livianos, menos que de costumbre); hay que vencerlo para subir de nivel. Rotan tres jefes y en cada vuelta tienen más vida y
 // ataques más densos:
 // 0 FORTALEZA: hexágonos anidados que giran; dispara anillos y ráfagas en espiral.
 // 1 NÚCLEO: centro protegido por tres escudos giratorios que frenan los disparos; dispara
@@ -2742,4 +2720,6 @@ function drawBanana() {
   gE.fillStyle(0x8a5a2b, 1);
   for (const q of [p[0], p[8]]) gE.fillCircle(q.x, q.y, 3);
 }
+// Se crea al final, cuando ya existen todas las constantes y funciones del juego.
+new Phaser.Game(config);
 })();
