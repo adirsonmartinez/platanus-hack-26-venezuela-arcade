@@ -132,11 +132,11 @@ let boss; // jefe activo o null (ver sección Jefes)
 let tBan, tBanS, banT = 0; // aviso grande en pantalla (nivel nuevo o jefe) y su tiempo restante
 let tBoss; // nombre del jefe sobre su barra de vida
 let items, itT; // objetos sueltos por el mapa {x, y, k (tipo), t (vida)} y espera hasta el próximo
+let gL; // logo del menú
 let tCombo, tPop; // texto del combo y aviso flotante al tomar un objeto
 let tMul, mu = 0; // aviso grande del multiplicador ("x5!") y su tiempo restante
 let ban, banW; // plátano que cruza el mapa {x, y, vx, vy, a, t, tr (estela)} o null, y espera hasta el próximo
 let tMenu; // textos de la pantalla de inicio
-const NAME = 'NEÓN GRID'; // nombre provisional del juego
 const BOARD_KEY = 'neongrid.scores';
 const ABC = 'ABCDEFGHIJKLMNÑOPQRSTUVWXYZ0123456789';
 
@@ -1881,18 +1881,15 @@ function createMenu(scene) {
   const tx = (y, size, col, sh) =>
     scene.add.text(W / 2, y, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: size, color: col, align: 'center' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(12).setShadow(0, 0, sh, 14, true, true);
-  // Título en tres capas: rojo y cian desplazados (aberración cromática) bajo el blanco.
+  // Logo "COMET" dibujado con líneas (ver drawLogo) y "SURVIVOR" en amarillo, espaciado.
+  gL = scene.add.graphics().setScrollFactor(0).setDepth(12);
   tMenu = {
-    r: tx(190, 76, '#ff2a5a', '#ff2a5a').setBlendMode(Phaser.BlendModes.ADD),
-    c: tx(190, 76, '#2ad8ff', '#2ad8ff').setBlendMode(Phaser.BlendModes.ADD),
-    t: tx(190, 76, '#f2fbff', '#ff3cf0'),
-    sub: tx(262, 15, '#bfe9ff', '#5fd8ff'),
+    sub: tx(262, 26, '#ffe23a', '#ffd23a').setLetterSpacing(16),
     go: tx(390, 24, '#f2fbff', '#ff3cf0'),
     ctl: tx(500, 13, '#bfe9ff', '#5fd8ff'),
     best: tx(540, 15, '#ffb02e', '#ff7a1a'),
   };
-  for (const k of ['r', 'c', 't']) tMenu[k].setText(NAME);
-  tMenu.sub.setText('SOBREVIVE  ·  RECOLECTA  ·  MEJORA');
+  tMenu.sub.setText('SURVIVOR');
   tMenu.go.setText('PRESIONA START');
   tMenu.ctl.setText('JOYSTICK  MOVER     [1]  DISPARAR     [2]  DASH');
   for (const t of [tLvl, tTime, tScore, tCr]) t.setVisible(false);
@@ -1931,6 +1928,7 @@ function updateMenu(scene, s) {
     tBoard.setVisible(false);
     for (const t of [tLvl, tTime, tScore, tCr]) t.setVisible(true);
     gE.clear();
+    gL.clear();
     sfx.lvl();
     restart();
     bm = kb == 'UUDDLRLR21';
@@ -1974,18 +1972,56 @@ function updateMenu(scene, s) {
   // Cada 14 segundos alterna sola entre el título y la tabla (si hay puntajes).
   const sb = mB || (board.length && mT % 14 > 8);
   tMenu.best.setText(mB ? '[2]  VOLVER' : 'RÉCORD ' + String(best).padStart(6, '0') + '      [2]  PUNTAJES');
-  for (const k of ['r', 'c', 't', 'sub']) tMenu[k].setVisible(!sb);
+  tMenu.sub.setVisible(!sb);
+  gL.clear();
   tBoard.setText('MEJORES PUNTAJES\n\n' + boardText(-1)).setY(225).setVisible(sb);
   if (sb) return;
   band(W / 2, W / 2 + 330, 190, 110, 10, HB, 0.22, 0);
   band(W / 2, W / 2 - 330, 190, 110, 10, HB, 0.22, 0);
   band(W / 2, W / 2 + 260, 236, 3, 1, HC, 0.9, 0);
   band(W / 2, W / 2 - 260, 236, 3, 1, HC, 0.9, 0);
-  // Glitch: de vez en cuando las capas de color se separan más.
-  const g = random() < 0.05 ? 9 : 3;
-  tMenu.r.setPosition(W / 2 - g, 190).setAlpha(0.7 * fl);
-  tMenu.c.setPosition(W / 2 + g, 190).setAlpha(0.7 * fl);
-  tMenu.t.setAlpha(fl);
+  // Rayas amarillas a los lados de SURVIVOR.
+  gH.fillStyle(0xffe23a, 0.9);
+  gH.fillRect(W / 2 - 230, 261, 95, 3);
+  gH.fillRect(W / 2 + 135, 261, 95, 3);
+  drawLogo(fl);
+}
+
+// Logo COMET: letras huecas inclinadas (trazo blanco grueso con el centro negro), con
+// aberración cromática roja y cian; la O es la nave hexagonal con una estela de cometa.
+// Cada letra es una lista de trazos en una celda de 60×70 (C, O, M, E, T).
+const LOGO = [
+  [[[55, 0], [15, 0], [0, 15], [0, 55], [15, 70], [55, 70]]],
+  0,
+  [[[0, 70], [0, 0], [14, 0], [30, 26], [46, 0], [60, 0], [60, 70]]],
+  [[[55, 0], [0, 0], [0, 70], [55, 70]], [[0, 35], [42, 35]]],
+  [[[0, 0], [62, 0]], [[31, 0], [31, 70]]],
+];
+function drawLogo(fl) {
+  const z = 1.35, x0 = W / 2 - 255, y0 = 140;
+  // Celda (x, y) de la letra que empieza en ox → pantalla, con inclinación a la derecha.
+  const P = (ox, [x, y]) => ({ x: x0 + (ox + x + (70 - y) * 0.22) * z, y: y0 + y * z });
+  const paths = [];
+  // La O se cierra repitiendo sus dos primeros puntos, para que la unión no quede cortada.
+  const hex = (r, a) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => P(72, [30 + cos(k * 1.047 + a) * r, 35 + sin(k * 1.047 + a) * r]));
+  LOGO.forEach((L, i) => {
+    const ox = [0, 72, 152, 232, 300][i];
+    paths.push(...(L ? L.map((l) => l.map((q) => P(ox, q))) : [hex(34, 0)]));
+  });
+  // Estela del cometa saliendo de la O hacia arriba a la derecha.
+  const o = P(72, [30, 35]);
+  for (let k = 0; k < 4; k++) {
+    gL.lineStyle(3 - k * 0.6, k & 1 ? 0xffe23a : 0xffffff, (0.8 - k * 0.15) * fl);
+    gL.lineBetween(o.x + 40 + k * 8, o.y - 40 - k * 4, o.x + 230 + k * 30, o.y - 120 - k * 18 + ((mT * 60 + k * 37) % 9));
+  }
+  const g = random() < 0.05 ? 7 : 3; // glitch: a veces las capas de color se separan más
+  for (const [w, c, al, dx] of [[30, HC, 0.12, 0], [20, 0xff2a5a, 0.55, -g], [20, 0x2ad8ff, 0.55, g], [17, 0xffffff, 1, 0], [10, 0x05060f, 1, 0]]) {
+    gL.lineStyle(w, c, al * fl);
+    for (const p of paths) gL.strokePoints(p.map((q) => ({ x: q.x + dx, y: q.y })));
+  }
+  // Núcleo de la O: hexágono chico, como la nave.
+  gL.lineStyle(3, 0xffffff, fl);
+  gL.strokePoints(hex(9, 0.5));
 }
 
 // ---------- Música ----------
