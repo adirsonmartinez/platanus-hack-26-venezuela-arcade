@@ -1012,6 +1012,11 @@ const sfx = {
   missile: () => tone(300, 1200, 0.15, 'triangle', 0.05),
   buy: () => [660, 880, 1320].forEach((f, i) => setTimeout(() => tone(f, f * 1.01, 0.1, 'square', 0.05), i * 60)),
   hit: () => tone(1800, 900, 0.05, 'square', 0.04),
+  // Golpe al jefe: más grave y con cuerpo, como si fuera metal pesado.
+  bhit: () => {
+    tone(260, 70, 0.1, 'square', 0.08);
+    noise(0.06, 0.12, 3000, 400);
+  },
   eshoot: () => tone(520, 180, 0.12, 'sawtooth', 0.04),
   orb: () => tone(1100 + random() * 300, 1800, 0.07, 'sine', 0.06),
   lvl: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, f, 0.12, 'triangle', 0.07), i * 70)),
@@ -2113,12 +2118,24 @@ const eb = (x, y, a, v, c) => eshots.push({ x, y, vx: cos(a) * v, vy: sin(a) * v
 // ¿El ángulo a choca con alguno de los tres escudos del núcleo?
 const shieldAt = (B, a) => [0, 1, 2].some((i) => abs(atan2(sin(a - B.a * 1.4 - i * 2.09), cos(a - B.a * 1.4 - i * 2.09))) < 0.65);
 
-function hitBoss(n) {
+// Golpe al jefe en (x, y), o en un punto de su borde si no se indica. Reacciona con
+// destello blanco, temblor, chispas en el punto de impacto y un golpe grave.
+function hitBoss(n, x, y) {
   const B = boss;
   if (!B || B.d) return;
   B.hp -= n * (st.pt > 0 ? 3 : 1); // con el plátano, triple daño
   B.hf = 0.06;
-  sfx.hit();
+  B.sk = 0.15;
+  if (x == null) {
+    const a = atan2(pl.y - B.y, pl.x - B.x) + (random() - 0.5);
+    x = B.x + cos(a) * BR2[B.k];
+    y = B.y + sin(a) * BR2[B.k];
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = atan2(y - B.y, x - B.x) + (random() - 0.5) * 2, v = 150 + random() * 250;
+    bits.push({ x, y, vx: cos(a) * v, vy: sin(a) * v, t: 0.25 + random() * 0.25, c: i & 1 ? 0xffffff : BC[B.k] });
+  }
+  sfx.bhit();
   if (B.hp <= 0) B.d = 1.4;
 }
 
@@ -2129,6 +2146,14 @@ function updateBoss(s) {
   const px = pl.x - B.x, py = pl.y - B.y, d = hypot(px, py), toP = atan2(py, px);
   B.a += s;
   B.hf -= s;
+  B.sk -= s;
+  // La barra deja ver en blanco el daño reciente, que se descuenta poco a poco.
+  B.hd = max(B.hp, (B.hd || B.mx) - B.mx * 0.5 * s);
+  // Muy dañado (menos de 30 %): suelta chispas de vez en cuando.
+  if (B.hp < B.mx * 0.3 && random() < s * 12) {
+    const a = random() * 6.28;
+    bits.push({ x: B.x + cos(a) * BR2[B.k] * 0.6, y: B.y + sin(a) * BR2[B.k] * 0.6, vx: cos(a) * 120, vy: sin(a) * 120, t: 0.5, c: random() < 0.5 ? YEL : RED });
+  }
   B.hc -= s;
   // Muriendo: explosiones por todo el cuerpo y al final una enorme.
   if (B.d) {
@@ -2213,7 +2238,7 @@ function updateBoss(s) {
     if ((B.k == 1 && r > 38 && r < 62 && shieldAt(B, atan2(dy, dx))) || (B.k == 2 && B.s.some((g) => hypot(b.x - g.x, b.y - g.y) < 20))) b.t = 0;
     else if (r < R) {
       b.t = 0;
-      hitBoss(1);
+      hitBoss(1, b.x, b.y);
     }
   }
   shots = shots.filter((b) => b.t > 0);
@@ -2256,6 +2281,16 @@ function bossLight() {
 function drawBoss() {
   const B = boss;
   if (!B || (B.d && random() < 0.3)) return;
+  // Al recibir un golpe tiembla: se dibuja corrido unos píxeles al azar.
+  const jx = B.sk > 0 ? (random() - 0.5) * 10 : 0, jy = B.sk > 0 ? (random() - 0.5) * 10 : 0;
+  B.x += jx;
+  B.y += jy;
+  drawBossBody(B);
+  B.x -= jx;
+  B.y -= jy;
+}
+
+function drawBossBody(B) {
   const c = B.hf > 0 ? 0xffffff : BC[B.k], ls = [];
   if (B.k == 0) {
     for (const [r, v] of [[62, 1], [44, -1.5], [26, 2]]) ls.push(hexPts(B.x, B.y, r, B.a * v));
@@ -2301,9 +2336,12 @@ function drawBossHud() {
   if (B) {
     tBoss.setText(BN[B.k]);
     gH.fillStyle(HB, 0.3);
-    gH.fillRect(250, 122, 300, 6);
+    const bx = 250 + (B.sk > 0 ? (random() - 0.5) * 6 : 0);
+    gH.fillRect(bx, 122, 300, 6);
+    gH.fillStyle(0xffffff, 0.8);
+    gH.fillRect(bx, 122, 300 * max(0, B.hd / B.mx), 6);
     gH.fillStyle(B.hf > 0 ? 0xffffff : BC[B.k], 0.95);
-    gH.fillRect(250, 122, 300 * max(0, B.hp / B.mx), 6);
+    gH.fillRect(bx, 122, 300 * max(0, B.hp / B.mx), 6);
     edge(B.x, B.y, BC[B.k]);
   }
   if (ban) edge(ban.x, ban.y, YEL);
