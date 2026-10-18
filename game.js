@@ -131,6 +131,7 @@ let tBan, tBanS, banT = 0; // aviso grande en pantalla (nivel nuevo o jefe) y su
 let tBoss; // nombre del jefe sobre su barra de vida
 let items, itT; // objetos sueltos por el mapa {x, y, k (tipo), t (vida)} y espera hasta el próximo
 let tCombo, tPop; // texto del combo y aviso flotante al tomar un objeto
+let ban, banW; // plátano que cruza el mapa {x, y, vx, vy, a, t, tr (estela)} o null, y espera hasta el próximo
 let tMenu; // textos de la pantalla de inicio
 const NAME = 'NEÓN GRID'; // nombre provisional del juego
 const BOARD_KEY = 'neongrid.scores';
@@ -195,7 +196,7 @@ function create() {
     gP.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.4, 4);
   }
   sc = this;
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0 };
+  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   createHud(this);
   createMenu(this);
   try {
@@ -231,6 +232,8 @@ function create() {
   orbs = [];
   items = [];
   itT = 15;
+  ban = null;
+  banW = 35;
   cx = cy = 0;
   // z: cuánto se mueven con la cámara (más bajo = más lejos y más tenue)
   stars = [];
@@ -349,6 +352,7 @@ function update(_, dt) {
   updateBoss(s);
   updateOrbs(s);
   updateItems(s);
+  updateBanana(s);
 
   // La cámara solo sigue al jugador cuando sale de la zona muerta, y lo hace suave.
   const tx = pl.x - clamp(pl.x - cx, -DZX, DZX);
@@ -361,7 +365,7 @@ function update(_, dt) {
   // La luz se apaga con el tiempo; cerca del jugador se recarga según la distancia.
   fade(s);
   // Cada cosa ilumina la grilla con su propio color.
-  if (live) light(pl.x, pl.y, LR, 1);
+  if (live) light(pl.x, pl.y, LR * (st.pt > 0 ? 1.4 : 1), 1, st.pt > 0 ? YEL : 0xffffff);
   for (const b of shots) light(b.x, b.y, 70, 0.5, b.c);
   for (const b of beams) {
     for (const a of beamAngles(b)) {
@@ -383,6 +387,7 @@ function update(_, dt) {
   for (const b of eshots) light(b.x, b.y, 60, 0.4, b.c);
   if (boss) bossLight();
   for (const o of items) light(o.x, o.y, 90, 0.6, IC[o.k]);
+  if (ban) ban.tr.forEach((q, i) => i % 4 || light(q.x, q.y, 80, 0.7 * (1 - i / 24), YEL));
   for (const o of orbs) light(o.x, o.y, 50, 0.3, OB);
 
   drawStars();
@@ -870,7 +875,7 @@ function drop(x, y, n) {
 // Quita d (0..1) de la barra de escudo. Si se vacía, pierdes un corazón, la barra se
 // rellena y quedas invulnerable un momento (parpadea). El daño sobrante se descarta.
 function hurt(d) {
-  if (st.inv > 0 || st.dead || pl.dt > 0) return;
+  if (st.inv > 0 || st.dead || pl.dt > 0 || st.pt > 0) return;
   st.cb = 0; // recibir daño corta el combo
   st.sh -= d;
   st.rg = 2;
@@ -897,7 +902,7 @@ function hurt(d) {
 
 // Nueva partida en el mismo lugar del mundo, sin enemigos cerca.
 function restart() {
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0 };
+  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   foes = [];
   jets = [];
   spins = [];
@@ -916,6 +921,8 @@ function restart() {
   banT = 0;
   items = [];
   itT = 15;
+  ban = null;
+  banW = 35;
   for (const t of [tOver, tBan, tBanS, tBoss]) t.setVisible(false);
   shop = null;
   hideShop();
@@ -1187,6 +1194,7 @@ function drawFoes() {
   }
   drawBoss();
   drawItems();
+  drawBanana();
   for (const b of eshots) {
     gE.fillStyle(b.c, 0.25);
     gE.fillCircle(b.x, b.y, 7);
@@ -1303,6 +1311,13 @@ function drawPlayer() {
     gP.arc(pl.x, pl.y, pl.r + 12, -PI / 2, -PI / 2 + 6.283 * (1 - pl.dc / DCD));
     gP.strokePath();
   }
+  // Modo plátano: arco amarillo con el tiempo que queda; parpadea cuando está por terminar.
+  if (st.pt > 0 && !st.dead && (st.pt > 1.5 || (st.pt * 8) & 1)) {
+    gP.lineStyle(3, YEL, 0.7);
+    gP.beginPath();
+    gP.arc(pl.x, pl.y, pl.r + 18, -PI / 2, -PI / 2 + 6.283 * (st.pt / PT));
+    gP.strokePath();
+  }
   if (!st.dead && !(st.inv > 0 && (st.inv * 12) & 1)) drawShip();
   drawPowers();
   // Proyectiles: trazo corto en la dirección de vuelo, del color de quien los dispara.
@@ -1325,7 +1340,7 @@ function drawShip() {
     { x: pl.x + cos(f + 0.2) * (pl.r + 4), y: pl.y + sin(f + 0.2) * (pl.r + 4) },
   ];
   for (const [w, al] of [[14, 0.06], [8, 0.12], [4, 0.35], [2, 1]]) {
-    gP.lineStyle(w, w > 2 ? 0xfff2d0 : 0xffffff, al);
+    gP.lineStyle(w, w > 2 ? (st.pt > 0 ? YEL : 0xfff2d0) : 0xffffff, al);
     gP.strokePoints(o, true);
   }
   for (const [w, al] of [[5, 0.15], [1.5, 1]]) {
@@ -1952,7 +1967,7 @@ function nz(ac, at, dur, vol, type, fc) {
 }
 
 function beat(ac, n, at) {
-  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], L = menu ? 0 : st.lvl + (boss ? 3 : 0);
+  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], L = menu ? 0 : st.lvl + (boss || st.pt > 0 ? 3 : 0);
   STEP = 60 / (148 + min(16, max(0, L - 5) * 2)) / 4;
   if (s % 4 == 0) {
     // Bombo: va directo a la salida y agacha el resto (efecto "sidechain" que bombea).
@@ -2101,7 +2116,7 @@ const shieldAt = (B, a) => [0, 1, 2].some((i) => abs(atan2(sin(a - B.a * 1.4 - i
 function hitBoss(n) {
   const B = boss;
   if (!B || B.d) return;
-  B.hp -= n;
+  B.hp -= n * (st.pt > 0 ? 3 : 1); // con el plátano, triple daño
   B.hf = 0.06;
   sfx.hit();
   if (B.hp <= 0) B.d = 1.4;
@@ -2269,6 +2284,15 @@ function drawBoss() {
   }
 }
 
+// Flecha que late en el borde de la pantalla, apuntando a (wx, wy) si está fuera de vista.
+function edge(wx, wy, c) {
+  const sx = wx - cx + W / 2, sy = wy - cy + H / 2;
+  if (sx > 0 && sx < W && sy > 0 && sy < H) return;
+  const a = atan2(sy - H / 2, sx - W / 2), x = clamp(sx, 30, W - 30), y = clamp(sy, 120, H - 30);
+  gH.fillStyle(c, 0.5 + 0.5 * sin(st.time * 16));
+  gH.fillTriangle(x + cos(a) * 14, y + sin(a) * 14, x + cos(a + 2.4) * 10, y + sin(a + 2.4) * 10, x + cos(a - 2.4) * 10, y + sin(a - 2.4) * 10);
+}
+
 // Barra de vida del jefe bajo el puntaje, flecha en el borde si está fuera de pantalla,
 // y el aviso grande en el centro.
 function drawBossHud() {
@@ -2280,13 +2304,9 @@ function drawBossHud() {
     gH.fillRect(250, 122, 300, 6);
     gH.fillStyle(B.hf > 0 ? 0xffffff : BC[B.k], 0.95);
     gH.fillRect(250, 122, 300 * max(0, B.hp / B.mx), 6);
-    const sx = B.x - cx + W / 2, sy = B.y - cy + H / 2;
-    if (sx < 0 || sx > W || sy < 0 || sy > H) {
-      const a = atan2(sy - H / 2, sx - W / 2), x = clamp(sx, 30, W - 30), y = clamp(sy, 120, H - 30);
-      gH.fillStyle(BC[B.k], 0.5 + 0.5 * sin(B.a * 8));
-      gH.fillTriangle(x + cos(a) * 14, y + sin(a) * 14, x + cos(a + 2.4) * 10, y + sin(a + 2.4) * 10, x + cos(a - 2.4) * 10, y + sin(a - 2.4) * 10);
-    }
+    edge(B.x, B.y, BC[B.k]);
   }
+  if (ban) edge(ban.x, ban.y, YEL);
   const on = banT > 0;
   tBan.setVisible(on);
   tBanS.setVisible(on);
@@ -2335,7 +2355,7 @@ function takeItem(o) {
   else {
     // Bomba: onda enorme que destruye todo lo cercano y los proyectiles enemigos. Da un
     // segundo de invulnerabilidad para que las explosiones en cadena no te alcancen.
-    st.inv = 1;
+    st.inv = max(st.inv, 1);
     boom(pl.x, pl.y, 340, 0xffffff, YEL);
     targets();
     for (const t of tg) {
@@ -2377,5 +2397,76 @@ function drawItems() {
       gE.lineBetween(o.x + 6, o.y - 2, o.x + 6, o.y - 7);
     }
   }
+}
+
+// ---------- Plátano ----------
+// Cada 40–70 s (y una vez en cada pelea con jefe) un plátano cruza el mapa muy rápido,
+// zigzagueando y dejando una estela amarilla. Al tomarlo, durante PT segundos eres
+// invencible, destruyes todo lo que tocas (también los proyectiles) y haces triple daño
+// al jefe. Más rápido que el jugador: hay que cortarle el paso o alcanzarlo con el dash.
+const PT = 8;
+
+function updateBanana(s) {
+  if (st.dead) return;
+  if (!ban && ((banW -= s) <= 0 || (boss && !boss.b && boss.hp < boss.mx * 0.8))) {
+    if (boss) boss.b = 1;
+    banW = 40 + random() * 30;
+    // Entra desde lejos y pasa cerca del jugador, a un lado.
+    const a = random() * 6.28, x = pl.x + cos(a) * 700, y = pl.y + sin(a) * 700;
+    const m = atan2(pl.y - y, pl.x - x) + (random() - 0.5) * 0.5;
+    ban = { x, y, m, a: 0, t: 0, tr: [] };
+    tone(800, 2400, 0.3, 'sine', 0.06);
+  }
+  if (ban) {
+    const b = ban;
+    b.t += s;
+    b.a += s * 9;
+    // Rumbo con zigzag: avanza a 430 px/s oscilando a los lados.
+    const h = b.m + sin(b.t * 5) * 0.7;
+    b.x += cos(h) * 430 * s;
+    b.y += sin(h) * 430 * s;
+    b.tr.unshift({ x: b.x, y: b.y });
+    b.tr.length = min(b.tr.length, 24);
+    if (hypot(b.x - pl.x, b.y - pl.y) < pl.r + 22) {
+      ban = null;
+      st.pt = PT;
+      sfx.lvl();
+      banner('¡MODO PLATANUS!', 'INVENCIBLE  ·  DESTRUYE TODO  ·  x3 AL JEFE', YEL);
+    } else if (b.t > 5) ban = null;
+  }
+  if ((st.pt -= s) > 0) {
+    // Todo lo que toques se destruye.
+    targets();
+    for (const t of tg) {
+      if (hypot(t.e.x - pl.x, t.e.y - pl.y) > pl.r + (t.k == 6 ? BR2[t.e.k] : 22)) continue;
+      if (t.k == 6) hitBoss(10 * s);
+      else for (let i = 0; i < 5 && !t.e.dead; i++) hitEnemy(t.e, t.k);
+    }
+    eshots = eshots.filter((b) => hypot(b.x - pl.x, b.y - pl.y) > pl.r + 10);
+  }
+}
+
+// Medialuna en coordenadas locales: borde exterior y luego el interior de vuelta.
+const BAN = [];
+for (let i = 0; i <= 8; i++) BAN.push([cos(-PI / 2 + (i / 8 - 0.5) * 1.9) * 24, sin(-PI / 2 + (i / 8 - 0.5) * 1.9) * 24 + 12]);
+for (let i = 8; i >= 0; i--) BAN.push([cos(-PI / 2 + (i / 8 - 0.5) * 1.9) * 20, sin(-PI / 2 + (i / 8 - 0.5) * 1.9) * 20 + 17]);
+
+function drawBanana() {
+  const b = ban;
+  if (!b) return;
+  for (let i = 1; i < b.tr.length; i++) {
+    gE.lineStyle(10 * (1 - i / b.tr.length), YEL, 0.5 * (1 - i / b.tr.length));
+    gE.lineBetween(b.tr[i - 1].x, b.tr[i - 1].y, b.tr[i].x, b.tr[i].y);
+  }
+  const p = shape(b, BAN);
+  gE.fillStyle(YEL, 0.35);
+  gE.fillPoints(p, true);
+  for (const [w, al] of [[10, 0.15], [4, 0.4], [2, 1]]) {
+    gE.lineStyle(w, w > 2 ? YEL : 0xfffbe0, al);
+    gE.strokePoints(p, true);
+  }
+  // Puntas cafés.
+  gE.fillStyle(0x8a5a2b, 1);
+  for (const q of [p[0], p[8]]) gE.fillCircle(q.x, q.y, 3);
 }
 })();
