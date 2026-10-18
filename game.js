@@ -2239,6 +2239,68 @@ function updateEntry() {
       gShop.strokeRoundedRect(x - w / 2, KY(c) - 20, w, 40, 6);
     }
   }
+  drawAlien(st.dead);
+}
+
+// ---------- Alien burlón ----------
+// En la pantalla de iniciales, como el perro de Duck Hunt: un alien pixelado se ríe de ti
+// sin parar, subiendo y bajando los hombros. Letras: k borde, g verde, d sombra, w dientes,
+// m boca, p puntas de las antenas. El cuerpo empieza con el cuello debajo de la cabeza.
+const AL_HEAD = [
+  '....pp..........pp....',
+  '....pp..........pp....',
+  '.....k..........k.....',
+  '......k........k......',
+  '.......kkkkkkkk.......',
+  '.....kkggggggggkk.....',
+  '...kkggggggggggggkk...',
+  '..kggggggggggggggggk..',
+  '.kggggkkggggggkkggggk.',
+  '.kgggkggkggggkggkgggk.',
+  '.kggggggggggggggggggk.',
+  '.kgggggkkkkkkkkgggggk.',
+  '..kggggkwwwwwwkggggk..',
+  '..kggggkmmmmmmkggggk..',
+  '...kgggkmmppmmkgggk...',
+  '....kgggkkkkkkgggk....',
+  '.....kkggggggggkk.....',
+  '.......kkkkkkkk.......',
+];
+const AL_BODY = [
+  '........kggggk........',
+  '........kggggk........',
+  '........kggggk........',
+  '....kkkkkggggkkkkk....',
+  '..kkggggggggggggggkk..',
+  '.kggggggggggggggggggk.',
+  'kgggggkkkggggkkkgggggk',
+  'kggggkgggkggkgggkggggk',
+  'kggggkgggkggkgggkggggk',
+  'kgggggkkkggggkkkgggggk',
+  'kdgggggggggggggggggggk',
+  'kdggggggddggddgggggdgk',
+  'kdgggggggggggggggggdgk',
+  'kdgggggggggggggggggdgk',
+  'kdgggggggggggggggggdgk',
+  'kdgggggggggggggggggdgk',
+];
+const ALC = { k: 0x8dff8d, g: 0x2f9a3a, d: 0x1f6b2a, w: 0xffffff, m: 0x1a0510, p: 0xff5fd8 };
+
+function drawAlien(t) {
+  const p = 3, x0 = 16, y0 = H - 31 * p;
+  // Dos poses que se alternan rápido: hombros arriba con la cabeza abajo, y al revés.
+  const f = (t * 7) & 1, hy = y0 + (f ? p : 0), by = y0 + 15 * p + (f ? -p : p);
+  const px = (rows, y) =>
+    rows.forEach((row, r) => {
+      for (let c = 0; c < 22; c++) {
+        const k = row[c];
+        if (k == '.') continue;
+        gShop.fillStyle(ALC[k], 1);
+        gShop.fillRect(x0 + c * p, y + r * p, p, p);
+      }
+    });
+  px(AL_BODY, by);
+  px(AL_HEAD, hy);
 }
 
 // ---------- Jefes ----------
