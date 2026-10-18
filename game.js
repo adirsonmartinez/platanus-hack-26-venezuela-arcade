@@ -2396,12 +2396,13 @@ function drawBossHud() {
 // ---------- Objetos del mapa ----------
 // Aparecen cada 15–25 s cerca del jugador y a veces los suelta un enemigo destruido (el jefe
 // siempre suelta uno). Duran 12 s y parpadean los últimos 3.
-// 0 VIDA (+1 corazón), 1 ESCUDO (barra llena), 2 BOMBA (destruye lo cercano), 3 IMÁN (8 s).
-const IN = ['+1 VIDA', 'ESCUDO', '¡BOMBA!', 'IMÁN'];
-const IC = [0xff4f7a, HC, YEL, OB];
+// 0 ESCUDO (barra llena), 1 BOMBA (destruye lo cercano), 2 IMÁN (8 s). No hay objetos que
+// devuelvan corazones: las vidas perdidas no se recuperan.
+const IN = ['ESCUDO', '¡BOMBA!', 'IMÁN'];
+const IC = [HC, YEL, OB];
 
 function spawnItem(x, y) {
-  items.push({ x, y, k: (random() * 4) | 0, t: 12, a: 0 });
+  items.push({ x, y, k: (random() * 3) | 0, t: 12, a: 0 });
 }
 
 function updateItems(s) {
@@ -2424,9 +2425,8 @@ function updateItems(s) {
 }
 
 function takeItem(o) {
-  if (o.k == 0) st.hp = min(5, st.hp + 1);
-  else if (o.k == 1) st.sh = 1;
-  else if (o.k == 3) st.mg = 8;
+  if (o.k == 0) st.sh = 1;
+  else if (o.k == 2) st.mg = 8;
   else {
     // Bomba: onda enorme que destruye todo lo cercano y los proyectiles enemigos. Da un
     // segundo de invulnerabilidad para que las explosiones en cadena no te alcancen.
@@ -2459,9 +2459,8 @@ function drawItems() {
     }
     gE.fillStyle(c, 1);
     gE.lineStyle(2, 0xffffff, 1);
-    if (o.k == 0) gE.fillPoints(heart(o.x, o.y + 1, 0.42), true);
-    else if (o.k == 1) gE.strokePoints(hexPts(o.x, o.y, 8, 0), true);
-    else if (o.k == 2) {
+    if (o.k == 0) gE.strokePoints(hexPts(o.x, o.y, 8, 0), true);
+    else if (o.k == 1) {
       gE.fillCircle(o.x, o.y + 2, 6);
       gE.lineBetween(o.x + 3, o.y - 3, o.x + 7, o.y - 8);
     } else {
