@@ -110,6 +110,7 @@ let eshots; // proyectiles enemigos {x, y, vx, vy, t}
 // estado de partida: hp (corazones), sh (barra de escudo 0..1), rg (espera para regenerar), hf (destello de la barra),
 // lvl, xp, cr (créditos), time, inv (invulnerable), dead (segundos muerto), pw (nivel de cada powerup)
 let st;
+let hs = 0, zp = 0, ch = 0, chT = 0; // impacto: congelado breve, zoom de golpe, explosiones en cadena
 let gH, tLvl, tTime, tScore, tCr, tOver; // HUD: gráficos y textos
 let shop; // tienda abierta: {c (powerups ofrecidos), s (carta elegida), t (segundos abierta)} o null
 let gShop, tShop; // tienda: gráficos y textos
@@ -244,7 +245,7 @@ function create() {
 }
 
 function update(_, dt) {
-  const s = dt / 1000;
+  let s = dt / 1000;
   music();
   // Con la tienda abierta el juego queda en pausa.
   if (shop) {
@@ -272,6 +273,12 @@ function update(_, dt) {
     for (const k in pressed) delete pressed[k];
     return;
   }
+  // Congelado breve tras un golpe fuerte: el mundo casi se detiene unos milisegundos.
+  if (hs > 0) {
+    hs -= s;
+    s *= 0.08;
+  }
+  if ((chT -= s) <= 0) ch = 0;
   st.inv -= s;
   banT -= s;
   st.mg -= s;
@@ -361,6 +368,10 @@ function update(_, dt) {
   cx += (tx - cx) * k;
   cy += (ty - cy) * k;
   this.cameras.main.setScroll(cx - W / 2, cy - H / 2);
+  // Zoom de golpe: el mundo se acerca un instante alrededor del centro de la cámara y vuelve.
+  zp -= zp * min(1, s * 7);
+  const z = 1 + zp;
+  for (const g of [gG, gE, gP]) g.setScale(z).setPosition(cx * (1 - z), cy * (1 - z));
 
   // La luz se apaga con el tiempo; cerca del jugador se recarga según la distancia.
   fade(s);
@@ -569,7 +580,12 @@ function boom(x, y, r, c, k, dmg) {
     const a = random() * 6.28, v = 120 + random() * r * 3.5;
     bits.push({ x, y, vx: cos(a) * v, vy: sin(a) * v, t: 0.4 + random() * 0.6, c: i % 3 ? c : k });
   }
-  sc.cameras.main.shake(r * 1.5, r * 0.00007);
+  // En cadena, cada explosión seguida sacude más fuerte; las grandes congelan un instante.
+  const n = ++ch;
+  chT = 0.35;
+  sc.cameras.main.shake(r * 1.5 + n * 25, r * 0.00007 * min(3, 1 + n * 0.25), n > 2);
+  if (r >= 55 || n > 3) hs = max(hs, r > 150 ? 0.22 : 0.045);
+  if (n > 3) zp = max(zp, min(0.06, n * 0.01));
   sfx.boom(r / BR);
 }
 
@@ -1369,7 +1385,10 @@ function reward(xp, cr) {
   const m0 = cm();
   st.cb++;
   st.ct = 2.5;
-  if (cm() > m0) tone(500 + cm() * 120, 900 + cm() * 160, 0.15, 'square', 0.05);
+  if (cm() > m0) {
+    tone(500 + cm() * 120, 900 + cm() * 160, 0.15, 'square', 0.05);
+    zp = max(zp, 0.03 + cm() * 0.005);
+  }
   st.pts += xp * cm();
   if (st.xp >= need() && !boss && !shop && st.sw <= 0 && !st.dead) openShop(1);
 }
@@ -2109,6 +2128,7 @@ function spawnBoss() {
   boss = { k, x: pl.x + cos(a) * 520, y: pl.y + sin(a) * 520, hp, mx: hp, a: 0, m: a + PI, t: 2, c: 0, hf: 0, hc: 0, d: 0 };
   if (k == 2) boss.s = Array.from({ length: 16 }, () => ({ x: boss.x, y: boss.y }));
   banner('¡JEFE!', BN[k], BC[k]);
+  zp = 0.08;
   sfx.warn();
 }
 
@@ -2266,6 +2286,7 @@ function bossDown() {
   const news = { 2: '¡LLEGAN FORMACIONES!', 5: '¡MINAS EN TRIÁNGULO!', 15: 'DIFICULTAD MÁXIMA' };
   banner('NIVEL ' + st.lvl, news[st.lvl] || (st.lvl < 15 ? 'MÁS RÁPIDO  ·  MÁS ENEMIGOS' : '¡SIGUE VIVO!'), HC);
   st.sw = 1.8;
+  zp = 0.12;
 }
 
 function bossLight() {
