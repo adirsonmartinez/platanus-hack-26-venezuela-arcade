@@ -939,7 +939,10 @@ function hurt(d) {
 
 // Nueva partida en el mismo lugar del mundo, sin enemigos cerca.
 function restart() {
-  pl.br = 0;
+  // Nada de la partida anterior: nave rota, dash y su estela, congelado y zoom de golpe.
+  pl.br = pl.dt = pl.dc = 0;
+  pl.gh = [];
+  hs = zp = ch = chT = 0;
   st = { hp: 3, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   foes = [];
   jets = [];
@@ -1908,6 +1911,8 @@ function toMenu() {
   blasts = [];
   menu = 1;
   mT = 0;
+  // El menú no aplica el zoom de golpe: las capas vuelven a su tamaño normal.
+  for (const g of [gG, gE, gP]) g.setScale(1).setPosition(0, 0);
   for (const k in tMenu) tMenu[k].setVisible(true);
   for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt, tCombo, tPop, tMul, ...tKeys]) t.setVisible(false);
   gShop.clear();
