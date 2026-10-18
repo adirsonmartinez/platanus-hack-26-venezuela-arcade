@@ -293,8 +293,9 @@ function update(_, dt) {
   if (st.sw > 0 && (st.sw -= s) <= 0) openShop();
   st.hf -= s;
   if (st.pf) st.pf[1] -= s;
-  // La barra de escudo se regenera sola tras 2 segundos sin recibir daño.
-  if ((st.rg -= s) <= 0 && !st.dead) st.sh = min(1, st.sh + s * 0.35);
+  // La barra de escudo se regenera sola tras unos segundos sin recibir daño; a mayor nivel,
+  // espera más y se llena más lento (nivel 1: 2 s y ~3 s; nivel 15: 4 s y ~8 s).
+  if ((st.rg -= s) <= 0 && !st.dead) st.sh = min(1, st.sh + (s * 0.35) / (1 + dif() * 0.12));
   if (st.dead) {
     st.dead += s;
     // Fin de partida: si el puntaje entra en la tabla, primero se ingresan las iniciales.
@@ -900,7 +901,7 @@ function hurt(d) {
   if (st.inv > 0 || st.dead || pl.dt > 0 || st.pt > 0) return;
   st.cb = 0; // recibir daño corta el combo
   st.sh -= d;
-  st.rg = 2;
+  st.rg = 2 + dif() * 0.15;
   st.hf = 0.15;
   if (st.sh > 0) {
     sc.cameras.main.flash(120, 110, 10, 30);
