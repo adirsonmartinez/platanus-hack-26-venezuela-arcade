@@ -425,9 +425,10 @@ function update(_, dt) {
 
 function updateFoes(s) {
   // Mantener FN enemigos cerca: aparecen fuera de pantalla y desaparecen si quedan muy lejos.
+  // Con el jefe siguen llegando, la mitad, para que la pelea no se quede vacía.
   foes = foes.filter((e) => hypot(e.x - pl.x, e.y - pl.y) < 1300);
   let n = foes.filter((e) => !e.g).length;
-  for (; !boss && n < FN + dif(); n++) {
+  for (; n < (FN + dif()) * (boss ? 0.5 : 1); n++) {
     const a = random() * 6.28, d = 520 + random() * 500;
     const m = random() * 6.28, v = (15 + random() * 30) * spd();
     foes.push({
@@ -521,7 +522,8 @@ function formation() {
 function updateJets(s) {
   jets = jets.filter((j) => !j.dead && hypot(j.x - pl.x, j.y - pl.y) < 1400);
   JT.forEach((T, t) => {
-    while (!boss && jets.filter((j) => j.t == t).length < T.n + ((dif() / (3 + t)) | 0)) {
+    // Con el jefe solo llegan aviones livianos, uno más cada 4 niveles.
+    while (jets.filter((j) => j.t == t).length < (boss ? (t ? 0 : 1 + (dif() >> 2)) : T.n + ((dif() / (3 + t)) | 0))) {
       const a = random() * 6.28, d = 650 + random() * 400;
       jets.push({ t, x: pl.x + cos(a) * d, y: pl.y + sin(a) * d, a: a + PI, m: a + PI, cd: 1 + random() * 2, hp: T.hp, hf: 0 });
     }
