@@ -198,7 +198,7 @@ function create() {
     gP.postFX.addBloom(0xffffff, 1, 1, 1.2, 1.4, 4);
   }
   sc = this;
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
+  st = { hp: 3, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 0, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   createHud(this);
   createMenu(this);
   try {
@@ -278,6 +278,11 @@ function update(_, dt) {
   if (hs > 0) {
     hs -= s;
     s *= 0.08;
+  }
+  // Nave rota tras perder un corazón: el mundo queda congelado hasta que se rearma.
+  if (pl.br > 0) {
+    if ((pl.br -= s) <= 0) tone(300, 1300, 0.18, 'square', 0.05); // chasquido al rearmarse
+    s = 0;
   }
   if ((chT -= s) <= 0) ch = 0;
   st.inv -= s;
@@ -913,7 +918,13 @@ function hurt(d) {
   st.inv = 1.5;
   sc.cameras.main.flash(220, 255, 30, 60);
   sfx.hurt();
-  if (st.hp <= 0) {
+  if (st.hp > 0) {
+    // Corazón perdido: la nave se rompe en sus 6 lados y se vuelve a armar.
+    pl.br = BRK;
+    sc.cameras.main.shake(250, 0.012);
+    tPop.setText('-1 VIDA').setShadow(0, 0, '#ff3c5a', 10, true, true).setVisible(true);
+    tPop.t = 1;
+  } else {
     st.dead = 0.001;
     boom(pl.x, pl.y, 90, 0xffffff, HC);
     hl = -1;
@@ -925,7 +936,8 @@ function hurt(d) {
 
 // Nueva partida en el mismo lugar del mundo, sin enemigos cerca.
 function restart() {
-  st = { hp: 5, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
+  pl.br = 0;
+  st = { hp: 3, sh: 1, rg: 0, hf: 0, lvl: 1, xp: 0, cr: 0, pts: 0, time: 0, inv: 1.5, dead: 0, pw: [0, 0, 0, 0, 0], bn: 0, sw: 0, cb: 0, ct: 0, mg: 0, pt: 0 };
   foes = [];
   jets = [];
   spins = [];
@@ -1347,7 +1359,8 @@ function drawPlayer() {
     gP.arc(pl.x, pl.y, pl.r + 18, -PI / 2, -PI / 2 + 6.283 * (st.pt / PT));
     gP.strokePath();
   }
-  if (!st.dead && !(st.inv > 0 && (st.inv * 12) & 1)) drawShip();
+  if (pl.br > 0 && !st.dead) drawBreak();
+  else if (!st.dead && !(st.inv > 0 && (st.inv * 12) & 1)) drawShip();
   drawPowers();
   // Proyectiles: trazo corto en la dirección de vuelo, del color de quien los dispara.
   for (const b of shots) {
@@ -1375,6 +1388,24 @@ function drawShip() {
   for (const [w, al] of [[5, 0.15], [1.5, 1]]) {
     gP.lineStyle(w, 0xffffff, al);
     gP.strokePoints(arr, false);
+  }
+}
+
+// Nave rota: cada lado del hexágono sale despedido girando y luego vuelve a su lugar.
+const BRK = 1.3; // segundos que dura romperse y rearmarse
+function drawBreak() {
+  const t = 1 - pl.br / BRK, o = hexPts(pl.x, pl.y, pl.r, pl.a);
+  // 0..0.4 se aleja frenando; 0.4..1 vuelve acelerando.
+  const d = t < 0.4 ? 1 - (1 - t / 0.4) ** 2 : 1 - ((t - 0.4) / 0.6) ** 2;
+  for (let i = 0; i < 6; i++) {
+    const p = o[i], q = o[(i + 1) % 6], mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
+    const a = atan2(my - pl.y, mx - pl.x), ox = cos(a) * d * 60, oy = sin(a) * d * 60;
+    const r = d * (i & 1 ? 2.5 : -2.5), h = pl.r / 2, ea = atan2(q.y - p.y, q.x - p.x) + r;
+    const cx2 = mx + ox, cy2 = my + oy, ex = cos(ea) * h, ey = sin(ea) * h;
+    for (const [w, al] of [[8, 0.12], [4, 0.35], [2, 1]]) {
+      gP.lineStyle(w, w > 2 ? HC : 0xffffff, al);
+      gP.lineBetween(cx2 - ex, cy2 - ey, cx2 + ex, cy2 + ey);
+    }
   }
 }
 
@@ -1501,7 +1532,7 @@ function drawHud() {
   segs(770, 680, 22, 4, 0.9);
   band(730, 500, 42, 22, 8, HB, 0.4, 0);
   segs(500, 550, 56, 4, 0.6);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 3; i++) {
     gH.fillStyle(HC, i < st.hp ? 0.95 : 0.15);
     gH.fillPoints(heart(706 - i * 24, 42, 0.5), true);
   }
