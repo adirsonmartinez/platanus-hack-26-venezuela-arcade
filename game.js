@@ -1883,15 +1883,13 @@ function createMenu(scene) {
   const tx = (y, size, col, sh) =>
     scene.add.text(W / 2, y, '', { fontFamily: 'monospace', fontStyle: 'bold', fontSize: size, color: col, align: 'center' })
       .setOrigin(0.5).setScrollFactor(0).setDepth(12).setShadow(0, 0, sh, 14, true, true);
-  // Logo "COMET" dibujado con líneas (ver drawLogo) y "SURVIVOR" en amarillo, espaciado.
+  // Logo "COMET SURVIVOR" con letras pixeladas de neón (ver drawLogo).
   gL = scene.add.graphics().setScrollFactor(0).setDepth(12);
   tMenu = {
-    sub: tx(262, 26, '#ffe23a', '#ffd23a').setLetterSpacing(16),
     go: tx(390, 24, '#f2fbff', '#ff3cf0'),
     ctl: tx(500, 13, '#bfe9ff', '#5fd8ff'),
     best: tx(540, 15, '#ffb02e', '#ff7a1a'),
   };
-  tMenu.sub.setText('SURVIVOR');
   tMenu.go.setText('PRESIONA START');
   tMenu.ctl.setText('JOYSTICK  MOVER     [1]  DISPARAR     [2]  DASH');
   for (const t of [tLvl, tTime, tScore, tCr]) t.setVisible(false);
@@ -1974,56 +1972,60 @@ function updateMenu(scene, s) {
   // Cada 14 segundos alterna sola entre el título y la tabla (si hay puntajes).
   const sb = mB || (board.length && mT % 14 > 8);
   tMenu.best.setText(mB ? '[2]  VOLVER' : 'RÉCORD ' + String(best).padStart(6, '0') + '      [2]  PUNTAJES');
-  tMenu.sub.setVisible(!sb);
   gL.clear();
   tBoard.setText('MEJORES PUNTAJES\n\n' + boardText(-1)).setY(225).setVisible(sb);
   if (sb) return;
   band(W / 2, W / 2 + 330, 190, 110, 10, HB, 0.22, 0);
   band(W / 2, W / 2 - 330, 190, 110, 10, HB, 0.22, 0);
-  band(W / 2, W / 2 + 260, 236, 3, 1, HC, 0.9, 0);
-  band(W / 2, W / 2 - 260, 236, 3, 1, HC, 0.9, 0);
-  // Rayas amarillas a los lados de SURVIVOR.
-  gH.fillStyle(0xffe23a, 0.9);
-  gH.fillRect(W / 2 - 230, 261, 95, 3);
-  gH.fillRect(W / 2 + 135, 261, 95, 3);
   drawLogo(fl);
 }
 
-// Logo COMET: letras huecas inclinadas (trazo blanco grueso con el centro negro), con
-// aberración cromática roja y cian; la O es la nave hexagonal con una estela de cometa.
-// Cada letra es una lista de trazos en una celda de 60×70 (C, O, M, E, T).
-const LOGO = [
-  [[[55, 0], [15, 0], [0, 15], [0, 55], [15, 70], [55, 70]]],
-  0,
-  [[[0, 70], [0, 0], [14, 0], [30, 26], [46, 0], [60, 0], [60, 70]]],
-  [[[55, 0], [0, 0], [0, 70], [55, 70]], [[0, 35], [42, 35]]],
-  [[[0, 0], [62, 0]], [[31, 0], [31, 70]]],
-];
+// Logo con letras pixeladas tipo arcade de 5×7: cada fila es un número de 5 bits escrito en
+// base 32 (un carácter por fila, de arriba a abajo).
+const FONT = { C: 'ehggghe', O: 'ehhhhhe', M: 'hrllhhh', E: 'vgguggv', T: 'v444444', S: 'fgge11u', U: 'hhhhhhe', R: 'uhhukih', V: 'hhhhha4', I: 'e44444e' };
+
+// Palabra centrada en x con su borde de arriba en y, píxeles de p de lado. Capas: halo de
+// neón, copias roja y azul desplazadas (aberración cromática), borde brillante, relleno
+// claro y una sombra abajo de cada trazo para darle relieve.
+function pixWord(w, x, y, p, c, f, fl, g) {
+  // px: [pantalla x, pantalla y, columna, fila]; S: casillas ocupadas, para unir vecinos.
+  const px = [], S = new Set();
+  [...w].forEach((ch, i) =>
+    [...FONT[ch]].forEach((row, r) => {
+      const b = parseInt(row, 32);
+      for (let k = 0; k < 5; k++)
+        if (b & (16 >> k)) {
+          const q = i * 6 + k;
+          px.push([x + (q - (w.length * 6 - 1) / 2) * p, y + r * p, q, r]);
+          S.add(q * 8 + r);
+        }
+    }),
+  );
+  const has = (q, r) => S.has(q * 8 + r);
+  const R = (e, dx, dy, col, al) => {
+    gL.fillStyle(col, al * fl);
+    for (const [a, b] of px) gL.fillRect(a - e + dx, b - e + dy, p + e * 2, p + e * 2);
+  };
+  R(p * 0.7, 0, 0, c, 0.06);
+  R(p * 0.35, 0, 0, c, 0.1);
+  R(1, g, 2, 0xff2a3a, 0.7);
+  R(1, -g, -1, 0x3a6bff, 0.7);
+  R(2, 0, 0, c, 1);
+  // Relleno claro: se mete 3 px solo por los lados sin vecino, así el trazo queda continuo.
+  gL.fillStyle(f, fl);
+  for (const [a, b, q, r] of px) {
+    const l = has(q - 1, r) ? 0 : 3, t = has(q, r - 1) ? 0 : 3;
+    gL.fillRect(a + l, b + t, p - l - (has(q + 1, r) ? 0 : 3), p - t - (has(q, r + 1) ? 0 : 3));
+  }
+  // Relieve: franja más oscura en el borde de abajo de cada trazo.
+  gL.fillStyle(c, 0.55 * fl);
+  for (const [a, b, q, r] of px) if (!has(q, r + 1)) gL.fillRect(a + (has(q - 1, r) ? 0 : 3), b + p - 7, p - (has(q - 1, r) ? 0 : 3) - (has(q + 1, r) ? 0 : 3), 4);
+}
+
 function drawLogo(fl) {
-  const z = 1.35, x0 = W / 2 - 255, y0 = 140;
-  // Celda (x, y) de la letra que empieza en ox → pantalla, con inclinación a la derecha.
-  const P = (ox, [x, y]) => ({ x: x0 + (ox + x + (70 - y) * 0.22) * z, y: y0 + y * z });
-  const paths = [];
-  // La O se cierra repitiendo sus dos primeros puntos, para que la unión no quede cortada.
-  const hex = (r, a) => [0, 1, 2, 3, 4, 5, 6, 7].map((k) => P(72, [30 + cos(k * 1.047 + a) * r, 35 + sin(k * 1.047 + a) * r]));
-  LOGO.forEach((L, i) => {
-    const ox = [0, 72, 152, 232, 300][i];
-    paths.push(...(L ? L.map((l) => l.map((q) => P(ox, q))) : [hex(34, 0)]));
-  });
-  // Estela del cometa saliendo de la O hacia arriba a la derecha.
-  const o = P(72, [30, 35]);
-  for (let k = 0; k < 4; k++) {
-    gL.lineStyle(3 - k * 0.6, k & 1 ? 0xffe23a : 0xffffff, (0.8 - k * 0.15) * fl);
-    gL.lineBetween(o.x + 40 + k * 8, o.y - 40 - k * 4, o.x + 230 + k * 30, o.y - 120 - k * 18 + ((mT * 60 + k * 37) % 9));
-  }
   const g = random() < 0.05 ? 7 : 3; // glitch: a veces las capas de color se separan más
-  for (const [w, c, al, dx] of [[30, HC, 0.12, 0], [20, 0xff2a5a, 0.55, -g], [20, 0x2ad8ff, 0.55, g], [17, 0xffffff, 1, 0], [10, 0x05060f, 1, 0]]) {
-    gL.lineStyle(w, c, al * fl);
-    for (const p of paths) gL.strokePoints(p.map((q) => ({ x: q.x + dx, y: q.y })));
-  }
-  // Núcleo de la O: hexágono chico, como la nave.
-  gL.lineStyle(3, 0xffffff, fl);
-  gL.strokePoints(hex(9, 0.5));
+  pixWord('COMET', W / 2, 92, 15, 0xff3cb4, 0xffd6f0, fl, g);
+  pixWord('SURVIVOR', W / 2, 222, 9, 0xffb21a, 0xfff2b8, fl, g);
 }
 
 // ---------- Música ----------
