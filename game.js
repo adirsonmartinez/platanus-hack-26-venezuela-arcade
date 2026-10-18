@@ -124,10 +124,10 @@ let bits; // chispas de explosión {x, y, vx, vy, t, c}
 let menu = 1, mT = 0, mB = 0; // pantalla de inicio activa, su reloj y si muestra la tabla a pedido
 let best = 0; // mejor puntaje de la tabla
 let board = []; // tabla de puntajes guardada: hasta 10 {n (iniciales), s (puntaje)}, de mayor a menor
-let ent; // ingreso de iniciales: {l (índice de cada letra), i (letra elegida)} o null
+let ent; // ingreso de iniciales: {n (lo escrito), c (casilla del teclado elegida)} o null
 let hl = -1; // fila de la tabla recién agregada, para resaltarla
 let pause = 0;
-let tBoard, tHint, tEnt; // textos de tabla, indicaciones e iniciales
+let tBoard, tHint, tEnt, tKeys; // textos de tabla, indicaciones, iniciales y teclas del teclado
 let boss; // jefe activo o null (ver sección Jefes)
 let tBan, tBanS, banT = 0; // aviso grande en pantalla (nivel nuevo o jefe) y su tiempo restante
 let tBoss; // nombre del jefe sobre su barra de vida
@@ -930,7 +930,7 @@ function hurt(d) {
     boom(pl.x, pl.y, 90, 0xffffff, HC);
     hl = -1;
     st.q = st.pts > 0 && (board.length < 10 || st.pts > board[board.length - 1].s);
-    if (st.q) ent = { l: [0, 0, 0], i: 0 };
+    if (st.q) ent = { n: '', c: 0 };
     else showOver();
   }
 }
@@ -1483,8 +1483,10 @@ function createHud(scene) {
     })),
   };
   tBoard = st2(W / 2, 330, 18, '#f2fbff');
-  tHint = st2(W / 2, 540, 15, '#bfe9ff');
-  tEnt = st2(W / 2, 320, 64, '#f2fbff');
+  tHint = st2(W / 2, 540, 15, '#bfe9ff', 780);
+  tEnt = st2(W / 2, 236, 48, '#f2fbff');
+  // Teclado de iniciales: 10 columnas por 4 filas; BORRAR ocupa dos casillas.
+  tKeys = [...ABC, 'BORRAR', 'OK'].map((k, i) => st2(KX(i < 37 ? i : i == 37 ? 37.5 : 39), KY(i < 37 ? i : 39), k.length > 2 ? 13 : 22, '#f2fbff').setText(k));
   tOver = scene.add.text(W / 2, 110, '', {
     fontFamily: 'monospace', fontStyle: 'bold', fontSize: 34, color: '#f2fbff', align: 'center',
   }).setOrigin(0.5).setScrollFactor(0).setDepth(11).setShadow(0, 0, '#ff3cf0', 14, true, true).setVisible(false);
@@ -1907,7 +1909,7 @@ function toMenu() {
   menu = 1;
   mT = 0;
   for (const k in tMenu) tMenu[k].setVisible(true);
-  for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt, tCombo, tPop, tMul]) t.setVisible(false);
+  for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt, tCombo, tPop, tMul, ...tKeys]) t.setVisible(false);
   gShop.clear();
 }
 
@@ -2167,18 +2169,40 @@ function showOver() {
   tHint.setText('PRESIONA START').setVisible(true);
 }
 
-// Iniciales: arriba/abajo cambia la letra, izquierda/derecha se mueve, [1] avanza y en la
-// tercera guarda. La letra elegida late y tiene flechas encima y debajo.
+// Teclado de iniciales: casilla c (0..39) → pantalla. Las 37 primeras son letras y números,
+// 37–38 es BORRAR y 39 es OK.
+const KX = (c) => W / 2 + ((c % 10) - 4.5) * 50;
+const KY = (c) => 318 + floor(c / 10) * 46;
+
+// Iniciales con teclado en pantalla: el joystick mueve el cursor (da la vuelta en los bordes),
+// [1] escribe la letra (o usa BORRAR / OK), [2] borra y START guarda. Al completar las tres
+// letras el cursor salta a OK.
 function updateEntry() {
   const e = ent;
-  if (pressed.P1_U || pressed.P1_D) {
-    e.l[e.i] = (e.l[e.i] + (pressed.P1_U ? ABC.length - 1 : 1)) % ABC.length;
+  const dx = (pressed.P1_R ? 1 : 0) - (pressed.P1_L ? 1 : 0), dy = (pressed.P1_D ? 1 : 0) - (pressed.P1_U ? 1 : 0);
+  if (dx || dy) {
+    let c = e.c == 38 ? 37 : e.c;
+    if (dx) c = floor(c / 10) * 10 + ((c % 10) + dx + 10) % 10;
+    // BORRAR mide dos casillas: hacia la derecha se salta la segunda.
+    if (c == 38) c = dx > 0 ? 39 : 37;
+    if (dy) c = (c + dy * 10 + 40) % 40;
+    e.c = c == 38 ? 37 : c;
     sfx.beep();
   }
-  if (pressed.P1_L && e.i > 0) e.i--, sfx.beep();
-  if ((pressed.P1_R || pressed.P1_1) && e.i < 2) e.i++, sfx.beep();
-  else if (pressed.P1_1 || pressed.START1) {
-    const n = e.l.map((k) => ABC[k]).join('');
+  let ok = pressed.START1;
+  if (pressed.P1_1) {
+    if (e.c < 37) {
+      if (e.n.length < 3) {
+        e.n += ABC[e.c];
+        if (e.n.length == 3) e.c = 39;
+        sfx.beep();
+      }
+    } else if (e.c == 37) e.n = e.n.slice(0, -1);
+    else ok = 1;
+  }
+  if (pressed.P1_2) e.n = e.n.slice(0, -1), sfx.beep();
+  if (ok && e.n) {
+    const n = e.n;
     board.push({ n, s: st.pts });
     board.sort((a, b) => b.s - a.s);
     board = board.slice(0, 10);
@@ -2189,22 +2213,30 @@ function updateEntry() {
     ent = null;
     st.dead = 1.21;
     tEnt.setVisible(false);
+    for (const t of tKeys) t.setVisible(false);
     sfx.buy();
     showOver();
     return;
   }
   overlay();
   tOver.setText('¡NUEVO PUNTAJE ALTO!').setVisible(true);
-  tBoard.setText('INGRESA TUS INICIALES\n\n' + String(st.pts).padStart(6, '0')).setY(200).setVisible(true);
-  tEnt.setText(e.l.map((k) => ABC[k]).join('  ')).setVisible(true);
-  tHint.setText('ARRIBA/ABAJO  LETRA     [1]  SIGUIENTE').setVisible(true);
-  // Cada letra ocupa 3 caracteres de ancho (letra + 2 espacios): ~38 px a 64 px de fuente.
-  const x = W / 2 + (e.i - 1) * 115, k = 0.6 + 0.4 * abs(sin(st.dead * 5));
-  gShop.lineStyle(3, 0xff3cf0, k);
-  gShop.lineBetween(x - 22, 362, x + 22, 362);
-  gShop.fillStyle(0xff3cf0, k);
-  gShop.fillTriangle(x - 10, 270, x + 10, 270, x, 258);
-  gShop.fillTriangle(x - 10, 378, x + 10, 378, x, 390);
+  tBoard.setText('INGRESA TUS INICIALES   ' + String(st.pts).padStart(6, '0')).setY(172).setVisible(true);
+  // Lo escrito, con guiones en las letras que faltan; el próximo guion late.
+  tEnt.setText([0, 1, 2].map((i) => e.n[i] || (i == e.n.length && (st.dead * 3) & 1 ? ' ' : '_')).join('  ')).setVisible(true);
+  tHint.setText('JOYSTICK  ELEGIR    [1]  ESCRIBIR    [2]  BORRAR    START  LISTO').setVisible(true);
+  for (const t of tKeys) t.setVisible(true);
+  // Teclas: fondo tenue; la elegida, recuadro magenta que late.
+  const k = 0.6 + 0.4 * abs(sin(st.dead * 5));
+  for (let c = 0; c < 40; c++) {
+    if (c == 38) continue;
+    const w = c == 37 ? 94 : 44, x = c == 37 ? KX(37) + 25 : KX(c);
+    gShop.fillStyle(c == e.c ? 0xff3cf0 : HB, c == e.c ? 0.3 * k : 0.15);
+    gShop.fillRoundedRect(x - w / 2, KY(c) - 20, w, 40, 6);
+    if (c == e.c) {
+      gShop.lineStyle(2, 0xff3cf0, k);
+      gShop.strokeRoundedRect(x - w / 2, KY(c) - 20, w, 40, 6);
+    }
+  }
 }
 
 // ---------- Jefes ----------
