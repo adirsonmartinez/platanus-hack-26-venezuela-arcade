@@ -110,6 +110,7 @@ let eshots; // proyectiles enemigos {x, y, vx, vy, t}
 // estado de partida: hp (corazones), sh (barra de escudo 0..1), rg (espera para regenerar), hf (destello de la barra),
 // lvl, xp, cr (créditos), time, inv (invulnerable), dead (segundos muerto), pw (nivel de cada powerup)
 let st;
+let bm = 0, kb = ''; // easter egg: nave plátano (código Konami en el menú) y últimas teclas del menú
 let hs = 0, zp = 0, ch = 0, chT = 0; // impacto: congelado breve, zoom de golpe, explosiones en cadena
 let gH, tLvl, tTime, tScore, tCr, tOver; // HUD: gráficos y textos
 let shop; // tienda abierta: {c (powerups ofrecidos), s (carta elegida), t (segundos abierta)} o null
@@ -350,7 +351,7 @@ function update(_, dt) {
     pl.cd = 0.14;
     const ux = cos(pl.f), uy = sin(pl.f);
     sfx.shoot();
-    shots.push({ x: pl.x + ux * (pl.r + 8), y: pl.y + uy * (pl.r + 8), vx: ux * 640, vy: uy * 640, t: 1.1 });
+    shots.push({ x: pl.x + ux * (pl.r + 8), y: pl.y + uy * (pl.r + 8), vx: ux * 640, vy: uy * 640, t: 1.1, c: bm ? YEL : 0xffffff });
   }
   if (live) updatePowers(s);
   else beams = [];
@@ -388,7 +389,7 @@ function update(_, dt) {
   fade(s);
   // Cada cosa ilumina la grilla con su propio color.
   // Con combo x4 o más la luz del jugador crece y la grilla brilla más.
-  if (live) light(pl.x, pl.y, LR * (st.pt > 0 ? 1.4 : 1 + max(0, cm() - 3) * 0.08), 1 + max(0, cm() - 3) * 0.1, st.pt > 0 ? YEL : 0xffffff);
+  if (live) light(pl.x, pl.y, LR * (st.pt > 0 ? 1.4 : 1 + max(0, cm() - 3) * 0.08), 1 + max(0, cm() - 3) * 0.1, st.pt > 0 || bm ? YEL : 0xffffff);
   for (const b of shots) light(b.x, b.y, 70, 0.5, b.c);
   for (const b of beams) {
     for (const a of beamAngles(b)) {
@@ -1381,9 +1382,22 @@ function drawShip() {
     tip,
     { x: pl.x + cos(f + 0.2) * (pl.r + 4), y: pl.y + sin(f + 0.2) * (pl.r + 4) },
   ];
-  for (const [w, al] of [[14, 0.06], [8, 0.12], [4, 0.35], [2, 1]]) {
-    gP.lineStyle(w, w > 2 ? (st.pt > 0 ? YEL : 0xfff2d0) : 0xffffff, al);
-    gP.strokePoints(o, true);
+  if (bm) {
+    // Nave plátano (easter egg): más grande que el plátano del mapa y con la curva hacia atrás.
+    const b = shape({ x: pl.x, y: pl.y, a: f - PI / 2 }, BAN.map(([x, y]) => [x * 1.4, (y + 3) * 1.4]));
+    gP.fillStyle(YEL, 0.35);
+    gP.fillPoints(b, true);
+    for (const [w, al] of [[12, 0.1], [5, 0.35], [2, 1]]) {
+      gP.lineStyle(w, w > 2 ? YEL : 0xfffbe0, al);
+      gP.strokePoints(b, true);
+    }
+    gP.fillStyle(0x8a5a2b, 1);
+    for (const q of [b[0], b[8]]) gP.fillCircle(q.x, q.y, 3);
+  } else {
+    for (const [w, al] of [[14, 0.06], [8, 0.12], [4, 0.35], [2, 1]]) {
+      gP.lineStyle(w, w > 2 ? (st.pt > 0 ? YEL : 0xfff2d0) : 0xffffff, al);
+      gP.strokePoints(o, true);
+    }
   }
   for (const [w, al] of [[5, 0.15], [1.5, 1]]) {
     gP.lineStyle(w, 0xffffff, al);
@@ -1887,6 +1901,7 @@ function createMenu(scene) {
 // Vuelve a la pantalla de inicio con el mapa limpio.
 function toMenu() {
   restart();
+  bm = 0;
   st.inv = 0;
   shots = [];
   orbs = [];
@@ -1901,6 +1916,8 @@ function toMenu() {
 
 function updateMenu(scene, s) {
   mT += s;
+  // Easter egg: ↑ ↑ ↓ ↓ ← → ← → [2] [1] (el B-A del código Konami) empieza con la nave plátano.
+  for (const k of ['P1_U', 'P1_D', 'P1_L', 'P1_R', 'P1_2', 'P1_1']) if (pressed[k]) kb = (kb + k[3]).slice(-10);
   // [2] abre o cierra la tabla de puntajes; al cerrarla, el título vuelve desde el principio.
   if (pressed.P1_2) {
     mB = !mB;
@@ -1916,6 +1933,12 @@ function updateMenu(scene, s) {
     gE.clear();
     sfx.lvl();
     restart();
+    bm = kb == 'UUDDLRLR21';
+    kb = '';
+    if (bm) {
+      banner('¡NAVE PLÁTANO!', 'CÓDIGO SECRETO DESBLOQUEADO', YEL);
+      [0, 4, 7, 12, 16].forEach((n, i) => sc.time.delayedCall(i * 90, () => tone(hz(72 + n), hz(84 + n), 0.12, 'square', 0.06)));
+    }
     return;
   }
   // La cámara avanza en diagonal: las estrellas y la grilla dan sensación de mapa infinito.
@@ -2037,7 +2060,7 @@ function nz(ac, at, dur, vol, type, fc) {
 }
 
 function beat(ac, n, at) {
-  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], F = menu ? 0 : cm(), L = menu ? 0 : st.lvl + (boss || st.pt > 0 ? 3 : 0) + (F >= 4) + (F >= 6);
+  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4] + bm * 5, F = menu ? 0 : cm(), L = menu ? 0 : st.lvl + (boss || st.pt > 0 ? 3 : 0) + (F >= 4) + (F >= 6);
   STEP = 60 / (148 + min(16, max(0, L - 5) * 2)) / 4;
   if (s % 4 == 0) {
     // Bombo: va directo a la salida y agacha el resto (efecto "sidechain" que bombea).
