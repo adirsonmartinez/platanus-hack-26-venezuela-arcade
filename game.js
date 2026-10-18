@@ -372,6 +372,8 @@ function update(_, dt) {
   updateOrbs(s);
   updateItems(s);
   updateBanana(s);
+  // Disparos que chocaron este cuadro (cada colisión pone t = 0).
+  shots = shots.filter((b) => b.t > 0);
 
   // La cámara solo sigue al jugador cuando sale de la zona muerta, y lo hace suave.
   const tx = pl.x - clamp(pl.x - cx, -DZX, DZX);
@@ -480,7 +482,6 @@ function updateFoes(s) {
     }
   }
   foes = foes.filter((e) => !e.dead);
-  shots = shots.filter((b) => b.t > 0);
 
   for (const e of blasts) e.t += s;
   blasts = blasts.filter((e) => e.t < 0.7);
@@ -570,7 +571,6 @@ function updateJets(s) {
     }
   }
   jets = jets.filter((j) => !j.dead);
-  shots = shots.filter((b) => b.t > 0);
   for (const b of eshots) {
     b.x += b.vx * s;
     b.y += b.vy * s;
@@ -634,7 +634,6 @@ function updateSpins(s) {
     }
   }
   spins = spins.filter((e) => !e.dead);
-  shots = shots.filter((b) => b.t > 0);
 }
 
 // Muertes de enemigos (por disparo o por explosión): explotan, dan recompensa y sueltan puntos.
@@ -768,7 +767,6 @@ function updateSnakes(s) {
     }
   }
   snakes = snakes.concat(born).filter((k) => k.s.length);
-  shots = shots.filter((b) => b.t > 0);
 }
 
 function updateMines(s) {
@@ -807,7 +805,6 @@ function updateMines(s) {
     }
   }
   mines = mines.filter((e) => !e.dead);
-  shots = shots.filter((b) => b.t > 0);
 }
 
 function updateWaves(s) {
@@ -856,7 +853,6 @@ function updateWaves(s) {
     }
   }
   dias = dias.filter((e) => !e.dead && !e.gone);
-  shots = shots.filter((b) => b.t > 0);
 }
 
 // ---------- Puntos recolectables ----------
@@ -971,10 +967,13 @@ function restart() {
 }
 
 function fade(s) {
-  for (const [key, v] of lv) {
-    for (let i = 0; i < 3; i++) v[i] = max(0, v[i] - s * 0.35);
+  const k = s * 0.35;
+  lv.forEach((v, key) => {
+    v[0] = max(0, v[0] - k);
+    v[1] = max(0, v[1] - k);
+    v[2] = max(0, v[2] - k);
     if (!(v[0] + v[1] + v[2])) lv.delete(key);
-  }
+  });
 }
 
 // Sonidos sintetizados con Web Audio (sin archivos).
@@ -1257,17 +1256,21 @@ function drawFoes() {
 // Ilumina los vértices dentro del radio R alrededor de (x, y), con intensidad máxima m y color c.
 // Con flat, la luz es pareja dentro de todo el radio en vez de apagarse hacia el borde.
 function light(x, y, R, m, c = 0xffffff, flat) {
-  const k = [(c >> 16) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
+  // Fuera de la pantalla no se ilumina nada: ahorra trabajo aquí y en fade().
+  if (abs(x - cx) > W / 2 + R + CS || abs(y - cy) > H / 2 + R + CS) return;
+  const k0 = (c >> 16) / 255, k1 = ((c >> 8) & 255) / 255, k2 = (c & 255) / 255, R2 = R * R;
   const c0 = ceil((x - R) / CS), c1 = floor((x + R) / CS);
   const r0 = ceil((y - R) / CS), r1 = floor((y + R) / CS);
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
-      const d = hypot(c * CS - x, r * CS - y) / R;
-      if (d >= 1) continue;
-      const f = flat ? m : (1 - d) * (1 - d) * m, key = gk(c, r);
-      const v = lv.get(key) || [0, 0, 0];
-      for (let i = 0; i < 3; i++) v[i] = max(v[i], min(1, f * k[i]));
-      lv.set(key, v);
+      const dx = c * CS - x, dy = r * CS - y, d2 = dx * dx + dy * dy;
+      if (d2 >= R2) continue;
+      const d = Math.sqrt(d2) / R, f = flat ? m : (1 - d) * (1 - d) * m, key = gk(c, r);
+      let v = lv.get(key);
+      if (!v) lv.set(key, (v = [0, 0, 0]));
+      v[0] = max(v[0], min(1, f * k0));
+      v[1] = max(v[1], min(1, f * k1));
+      v[2] = max(v[2], min(1, f * k2));
     }
   }
 }
@@ -1672,8 +1675,9 @@ function nearest(x, y, md) {
 }
 
 function updatePowers(s) {
-  targets();
   const L = st.pw;
+  // La lista de objetivos solo hace falta si hay algún powerup.
+  if (L.some(Boolean)) targets();
   for (let i = 0; i < 5; i++) pwt[i] -= s;
 
   // Láseres: duran un momento y dañan cada 0.1 s todo lo que tocan.
@@ -1994,20 +1998,22 @@ const FONT = { C: 'ehggghe', O: 'ehhhhhe', M: 'hrllhhh', E: 'vgguggv', T: 'v4444
 // Palabra centrada en x con su borde de arriba en y, píxeles de p de lado. Capas: halo de
 // neón, copias roja y azul desplazadas (aberración cromática), borde brillante, relleno
 // claro y una sombra abajo de cada trazo para darle relieve.
+const PXC = {}; // píxeles de cada palabra del logo, calculados una sola vez
 function pixWord(w, x, y, p, c, f, fl, g) {
   // px: [pantalla x, pantalla y, columna, fila]; S: casillas ocupadas, para unir vecinos.
-  const px = [], S = new Set();
-  [...w].forEach((ch, i) =>
-    [...FONT[ch]].forEach((row, r) => {
-      const b = parseInt(row, 32);
-      for (let k = 0; k < 5; k++)
-        if (b & (16 >> k)) {
-          const q = i * 6 + k;
-          px.push([x + (q - (w.length * 6 - 1) / 2) * p, y + r * p, q, r]);
-          S.add(q * 8 + r);
-        }
-    }),
-  );
+  const [px, S] = PXC[w] || (PXC[w] = [[], new Set()]);
+  if (!px.length)
+    [...w].forEach((ch, i) =>
+      [...FONT[ch]].forEach((row, r) => {
+        const b = parseInt(row, 32);
+        for (let k = 0; k < 5; k++)
+          if (b & (16 >> k)) {
+            const q = i * 6 + k;
+            px.push([x + (q - (w.length * 6 - 1) / 2) * p, y + r * p, q, r]);
+            S.add(q * 8 + r);
+          }
+      }),
+    );
   const has = (q, r) => S.has(q * 8 + r);
   const R = (e, dx, dy, col, al) => {
     gL.fillStyle(col, al * fl);
@@ -2471,7 +2477,6 @@ function updateBoss(s) {
       hitBoss(1, b.x, b.y);
     }
   }
-  shots = shots.filter((b) => b.t > 0);
   // Tocarlo daña, con una pausa antes de volver a dañar.
   const touch = d < R + pl.r || (B.k == 2 && B.s.some((g) => hypot(pl.x - g.x, pl.y - g.y) < 18 + pl.r));
   if (touch && B.hc <= 0 && !st.dead) {
