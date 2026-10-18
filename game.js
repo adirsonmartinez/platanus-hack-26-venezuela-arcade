@@ -132,6 +132,7 @@ let tBan, tBanS, banT = 0; // aviso grande en pantalla (nivel nuevo o jefe) y su
 let tBoss; // nombre del jefe sobre su barra de vida
 let items, itT; // objetos sueltos por el mapa {x, y, k (tipo), t (vida)} y espera hasta el próximo
 let tCombo, tPop; // texto del combo y aviso flotante al tomar un objeto
+let tMul, mu = 0; // aviso grande del multiplicador ("x5!") y su tiempo restante
 let ban, banW; // plátano que cruza el mapa {x, y, vx, vy, a, t, tr (estela)} o null, y espera hasta el próximo
 let tMenu; // textos de la pantalla de inicio
 const NAME = 'NEÓN GRID'; // nombre provisional del juego
@@ -283,7 +284,11 @@ function update(_, dt) {
   banT -= s;
   st.mg -= s;
   // El combo se corta si pasan unos segundos sin destruir nada.
-  if ((st.ct -= s) <= 0) st.cb = 0;
+  if ((st.ct -= s) <= 0) {
+    // Perder un combo largo suena a caída.
+    if (st.cb >= 20) tone(420, 90, 0.35, 'sawtooth', 0.06);
+    st.cb = 0;
+  }
   // Tras vencer al jefe, la tienda se abre cuando termina la explosión.
   if (st.sw > 0 && (st.sw -= s) <= 0) openShop();
   st.hf -= s;
@@ -376,7 +381,8 @@ function update(_, dt) {
   // La luz se apaga con el tiempo; cerca del jugador se recarga según la distancia.
   fade(s);
   // Cada cosa ilumina la grilla con su propio color.
-  if (live) light(pl.x, pl.y, LR * (st.pt > 0 ? 1.4 : 1), 1, st.pt > 0 ? YEL : 0xffffff);
+  // Con combo x4 o más la luz del jugador crece y la grilla brilla más.
+  if (live) light(pl.x, pl.y, LR * (st.pt > 0 ? 1.4 : 1 + max(0, cm() - 3) * 0.08), 1 + max(0, cm() - 3) * 0.1, st.pt > 0 ? YEL : 0xffffff);
   for (const b of shots) light(b.x, b.y, 70, 0.5, b.c);
   for (const b of beams) {
     for (const a of beamAngles(b)) {
@@ -939,7 +945,8 @@ function restart() {
   itT = 15;
   ban = null;
   banW = 35;
-  for (const t of [tOver, tBan, tBanS, tBoss]) t.setVisible(false);
+  mu = 0;
+  for (const t of [tOver, tBan, tBanS, tBoss, tMul]) t.setVisible(false);
   shop = null;
   hideShop();
 }
@@ -1240,7 +1247,7 @@ function light(x, y, R, m, c = 0xffffff, flat) {
       if (d >= 1) continue;
       const f = flat ? m : (1 - d) * (1 - d) * m, key = gk(c, r);
       const v = lv.get(key) || [0, 0, 0];
-      for (let i = 0; i < 3; i++) v[i] = max(v[i], f * k[i]);
+      for (let i = 0; i < 3; i++) v[i] = max(v[i], min(1, f * k[i]));
       lv.set(key, v);
     }
   }
@@ -1388,6 +1395,8 @@ function reward(xp, cr) {
   if (cm() > m0) {
     tone(500 + cm() * 120, 900 + cm() * 160, 0.15, 'square', 0.05);
     zp = max(zp, 0.03 + cm() * 0.005);
+    tMul.setText('x' + cm() + (cm() > 7 ? ' ¡FRENESÍ!' : '!'));
+    mu = 0.9;
   }
   st.pts += xp * cm();
   if (st.xp >= need() && !boss && !shop && st.sw <= 0 && !st.dead) openShop(1);
@@ -1410,6 +1419,7 @@ function createHud(scene) {
     .setOrigin(0.5).setScrollFactor(0).setDepth(9).setVisible(false);
   tBan = big(200, 56);
   tBanS = big(258, 18);
+  tMul = big(150, 44).setShadow(0, 0, '#ff7a1a', 16, true, true).setColor('#ffd23a');
   // Tienda: fondo, encabezado y 3 cartas (nombre, nivel, descripción, precio).
   gShop = scene.add.graphics().setScrollFactor(0).setDepth(10);
   const st2 = (x, y, size, col, wrap) =>
@@ -1515,6 +1525,10 @@ function drawHud() {
     gH.fillStyle(m > 1 ? ORA : HC, 0.85);
     gH.fillRect(W / 2 - 50, 94, 100 * max(0, st.ct / 2.5), 2);
   }
+  // "x5!" grande que entra de golpe y se desvanece.
+  mu -= sc.game.loop.delta / 1000;
+  tMul.setVisible(mu > 0 && !menu);
+  if (mu > 0) tMul.setAlpha(min(1, mu * 3)).setScale(1 + max(0, mu - 0.7) * 3);
 
   // Abajo a la izquierda: powerups que tienes, en hexágonos con su nivel en 4 marcas.
   // El recién comprado destella en magenta un momento.
@@ -1849,7 +1863,7 @@ function toMenu() {
   menu = 1;
   mT = 0;
   for (const k in tMenu) tMenu[k].setVisible(true);
-  for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt, tCombo, tPop]) t.setVisible(false);
+  for (const t of [tLvl, tTime, tScore, tCr, tOver, tBoard, tHint, tEnt, tCombo, tPop, tMul]) t.setVisible(false);
   gShop.clear();
 }
 
@@ -1991,7 +2005,7 @@ function nz(ac, at, dur, vol, type, fc) {
 }
 
 function beat(ac, n, at) {
-  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], L = menu ? 0 : st.lvl + (boss || st.pt > 0 ? 3 : 0);
+  const s = n % 16, bar = n >> 4, ch = ROOT[bar % 4], F = menu ? 0 : cm(), L = menu ? 0 : st.lvl + (boss || st.pt > 0 ? 3 : 0) + (F >= 4) + (F >= 6);
   STEP = 60 / (148 + min(16, max(0, L - 5) * 2)) / 4;
   if (s % 4 == 0) {
     // Bombo: va directo a la salida y agacha el resto (efecto "sidechain" que bombea).
@@ -2021,6 +2035,8 @@ function beat(ac, n, at) {
   if (L >= 5) vo(ac, at, 'sawtooth', hz(m + 12), hz(m + 12), 0.08, 0.035, 5000, 2);
   // Acordes "stab" a contratiempo.
   if (L >= 4 && (s == 6 || s == 14)) for (const k of [0, th, 7, 12]) vo(ac, at, 'sawtooth', hz(ch + k), hz(ch + k), 0.22, 0.05, 2600, 3);
+  // Combo x4 o más: sirena rave que cae cada medio compás.
+  if (F >= 4 && s % 8 == 0) vo(ac, at, 'sawtooth', hz(ch + 31), hz(ch + 19), STEP * 6, 0.045, 3800, 5);
   // Cada 8 compases, redoble que crece en la segunda mitad del último compás.
   if (bar % 8 == 7 && s >= 8) nz(ac, at, 0.08, 0.1 + (s - 8) * 0.05, 'bandpass', 2600);
 }
