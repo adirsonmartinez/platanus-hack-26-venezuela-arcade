@@ -923,7 +923,7 @@ function hurt(d) {
     // Corazón perdido: la nave se rompe en sus 6 lados y se vuelve a armar.
     pl.br = BRK;
     sc.cameras.main.shake(250, 0.012);
-    tPop.setText('-1 VIDA').setShadow(0, 0, '#ff3c5a', 10, true, true).setVisible(true);
+    tPop.setText('-1 LIFE').setShadow(0, 0, '#ff3c5a', 10, true, true).setVisible(true);
     tPop.t = 1;
   } else {
     st.dead = 0.001;
@@ -1441,7 +1441,7 @@ function reward(xp, cr) {
   if (cm() > m0) {
     tone(500 + cm() * 120, 900 + cm() * 160, 0.15, 'square', 0.05);
     zp = max(zp, 0.03 + cm() * 0.005);
-    tMul.setText('x' + cm() + (cm() > 7 ? ' ¡FRENESÍ!' : '!'));
+    tMul.setText('x' + cm() + (cm() > 7 ? ' FRENZY!' : '!'));
     mu = 0.9;
   }
   st.pts += xp * cm();
@@ -1486,7 +1486,7 @@ function createHud(scene) {
   tHint = st2(W / 2, 540, 15, '#bfe9ff', 780);
   tEnt = st2(W / 2, 236, 48, '#f2fbff');
   // Teclado de iniciales: 10 columnas por 4 filas; BORRAR ocupa dos casillas.
-  tKeys = [...ABC, 'BORRAR', 'OK'].map((k, i) => st2(KX(i < 37 ? i : i == 37 ? 37.5 : 39), KY(i < 37 ? i : 39), k.length > 2 ? 13 : 22, '#f2fbff').setText(k));
+  tKeys = [...ABC, 'DELETE', 'OK'].map((k, i) => st2(KX(i < 37 ? i : i == 37 ? 37.5 : 39), KY(i < 37 ? i : 39), k.length > 2 ? 13 : 22, '#f2fbff').setText(k));
   tOver = scene.add.text(W / 2, 110, '', {
     fontFamily: 'monospace', fontStyle: 'bold', fontSize: 34, color: '#f2fbff', align: 'center',
   }).setOrigin(0.5).setScrollFactor(0).setDepth(11).setShadow(0, 0, '#ff3cf0', 14, true, true).setVisible(false);
@@ -1535,7 +1535,7 @@ function drawHud() {
   }
   gH.fillStyle(HC, 0.95);
   gH.fillPoints(bolt, true);
-  tLvl.setText('NIVEL ' + st.lvl);
+  tLvl.setText('LEVEL ' + st.lvl);
 
   // Centro: panel oscuro bajo el tiempo.
   gH.fillStyle(HB, 0.18);
@@ -1562,7 +1562,7 @@ function drawHud() {
   gH.fillRect(598, 56, 118, 4);
   gH.fillStyle(st.hf > 0 ? 0xffffff : st.sh < 0.3 ? 0xff3c5a : HC, 0.95);
   gH.fillRect(598, 56, 118 * max(0, st.sh), 4);
-  tCr.setText('CRÉDITOS ' + st.cr);
+  tCr.setText('CREDITS ' + st.cr);
 
   drawBossHud();
   // Combo bajo el puntaje: multiplicador y una barra que se vacía hasta que se corta.
@@ -1613,11 +1613,11 @@ function heart(x, y, k) {
 // ---------- Powerups ----------
 // Cada uno tiene 4 niveles. Se compran con créditos en la tienda que se abre al subir de nivel.
 const PW = [
-  { n: 'LÁSER', d: 'DISPARA UN RAYO QUE ATRAVIESA ENEMIGOS HACIA ADELANTE CADA POCOS SEGUNDOS.', c: 12 },
-  { n: 'LÁSER CRUZ', d: 'DISPARA RAYOS QUE ATRAVIESAN ENEMIGOS EN CUATRO DIRECCIONES.', c: 16 },
-  { n: 'MISILES GUIADOS', d: 'LANZA MISILES QUE PERSIGUEN A LOS ENEMIGOS MÁS CERCANOS.', c: 12 },
-  { n: 'ESPIRAL', d: 'DISPARA PROYECTILES EN ESPIRAL ALREDEDOR DE LA NAVE.', c: 10 },
-  { n: 'DRONES', d: 'DRONES QUE GIRAN ALREDEDOR DE LA NAVE Y DISPARAN A LOS ENEMIGOS CERCANOS. MÁXIMO 3.', c: 14 },
+  { n: 'LASER', d: 'FIRES A PIERCING BEAM FORWARD EVERY FEW SECONDS.', c: 12 },
+  { n: 'CROSS LASER', d: 'FIRES PIERCING BEAMS IN FOUR DIRECTIONS.', c: 16 },
+  { n: 'HOMING MISSILES', d: 'LAUNCHES MISSILES THAT CHASE THE NEAREST ENEMIES.', c: 12 },
+  { n: 'SPIRAL', d: 'SHOOTS BULLETS IN A SPIRAL AROUND YOUR SHIP.', c: 10 },
+  { n: 'DRONES', d: 'DRONES ORBIT YOUR SHIP AND SHOOT NEARBY ENEMIES. UP TO 3.', c: 14 },
 ];
 const price = (i) => PW[i].c * (st.pw[i] + 1);
 // Rayo frontal: hacia donde apuntas. Cruz: 4 rayos que giran con el hexágono.
@@ -1812,9 +1812,9 @@ function drawShop() {
   g.clear();
   g.fillStyle(0x02030c, 0.75);
   g.fillRect(0, 0, W, H);
-  tShop.head.setText(shop.f ? '¡SE ACERCA UN JEFE!' : '¡SUBISTE DE NIVEL!').setVisible(true);
-  tShop.cr.setText(shop.f ? 'ELIGE UN POWERUP GRATIS' : 'CRÉDITOS ' + st.cr).setVisible(true);
-  tShop.foot.setText('< >  ELEGIR      [1] COMPRAR      [2] SALTAR').setVisible(true);
+  tShop.head.setText(shop.f ? 'BOSS INCOMING!' : 'LEVEL UP!').setVisible(true);
+  tShop.cr.setText(shop.f ? 'PICK A FREE POWERUP' : 'CREDITS ' + st.cr).setVisible(true);
+  tShop.foot.setText('< >  CHOOSE      [1] BUY      [2] SKIP').setVisible(true);
   const n = shop.c.length;
   tShop.cards.forEach((T, j) => {
     for (const k in T) T[k].setVisible(j < n);
@@ -1840,7 +1840,7 @@ function drawShop() {
     T.n.setPosition(cx, 228).setText(PW[i].n).setAlpha(dim);
     T.l.setPosition(cx, 272).setText(st.pw[i] + 1 + '/4').setAlpha(dim);
     T.d.setPosition(cx, 340).setText(PW[i].d).setAlpha(dim);
-    T.p.setPosition(cx, 420).setText(shop.f ? 'GRATIS' : 'PRECIO ' + price(i)).setColor(ok ? '#ffb02e' : '#ff5a6a');
+    T.p.setPosition(cx, 420).setText(shop.f ? 'FREE' : 'PRICE ' + price(i)).setColor(ok ? '#ffb02e' : '#ff5a6a');
   });
 }
 
@@ -1890,8 +1890,8 @@ function createMenu(scene) {
     ctl: tx(500, 13, '#bfe9ff', '#5fd8ff'),
     best: tx(540, 15, '#ffb02e', '#ff7a1a'),
   };
-  tMenu.go.setText('PRESIONA START');
-  tMenu.ctl.setText('JOYSTICK  MOVER     [1]  DISPARAR     [2]  DASH');
+  tMenu.go.setText('PRESS START');
+  tMenu.ctl.setText('JOYSTICK  MOVE     [1]  SHOOT     [2]  DASH');
   for (const t of [tLvl, tTime, tScore, tCr]) t.setVisible(false);
 }
 
@@ -1934,7 +1934,7 @@ function updateMenu(scene, s) {
     bm = kb == 'UUDDLRLR21';
     kb = '';
     if (bm) {
-      banner('¡NAVE PLÁTANO!', 'CÓDIGO SECRETO DESBLOQUEADO', YEL);
+      banner('BANANA SHIP!', 'SECRET CODE UNLOCKED', YEL);
       [0, 4, 7, 12, 16].forEach((n, i) => sc.time.delayedCall(i * 90, () => tone(hz(72 + n), hz(84 + n), 0.12, 'square', 0.06)));
     }
     return;
@@ -1971,9 +1971,9 @@ function updateMenu(scene, s) {
   tMenu.go.setAlpha(0.35 + 0.65 * abs(sin(mT * 2.5)));
   // Cada 14 segundos alterna sola entre el título y la tabla (si hay puntajes).
   const sb = mB || (board.length && mT % 14 > 8);
-  tMenu.best.setText(mB ? '[2]  VOLVER' : 'RÉCORD ' + String(best).padStart(6, '0') + '      [2]  PUNTAJES');
+  tMenu.best.setText(mB ? '[2]  BACK' : 'HIGH SCORE ' + String(best).padStart(6, '0') + '      [2]  SCORES');
   gL.clear();
-  tBoard.setText('MEJORES PUNTAJES\n\n' + boardText(-1)).setY(225).setVisible(sb);
+  tBoard.setText('HIGH SCORES\n\n' + boardText(-1)).setY(225).setVisible(sb);
   if (sb) return;
   band(W / 2, W / 2 + 330, 190, 110, 10, HB, 0.22, 0);
   band(W / 2, W / 2 - 330, 190, 110, 10, HB, 0.22, 0);
@@ -2148,8 +2148,8 @@ function setPause(on) {
   pause = on;
   if (on) {
     overlay();
-    tOver.setText('PAUSA').setVisible(true);
-    tHint.setText('START  CONTINUAR\n\n[2]  SALIR AL INICIO').setY(320).setVisible(true);
+    tOver.setText('PAUSED').setVisible(true);
+    tHint.setText('START  RESUME\n\n[2]  QUIT TO MENU').setY(320).setVisible(true);
     sfx.beep();
   } else {
     gShop.clear();
@@ -2160,15 +2160,15 @@ function setPause(on) {
 
 // Tabla como texto de ancho fijo; la fila h queda marcada con flechas.
 function boardText(h) {
-  if (!board.length) return 'SIN PUNTAJES TODAVÍA';
+  if (!board.length) return 'NO SCORES YET';
   return board.map((e, i) => (i == h ? '> ' : '  ') + String(i + 1).padStart(2) + '.  ' + e.n.padEnd(3) + '   ' + String(e.s).padStart(6, '0') + (i == h ? ' <' : '  ')).join('\n');
 }
 
 function showOver() {
   overlay();
-  tOver.setText('FIN DEL JUEGO').setVisible(true);
-  tBoard.setText('MEJORES PUNTAJES\n\n' + boardText(hl)).setY(320).setVisible(true);
-  tHint.setText('PRESIONA START').setVisible(true);
+  tOver.setText('GAME OVER').setVisible(true);
+  tBoard.setText('HIGH SCORES\n\n' + boardText(hl)).setY(320).setVisible(true);
+  tHint.setText('PRESS START').setVisible(true);
 }
 
 // Teclado de iniciales: casilla c (0..39) → pantalla. Las 37 primeras son letras y números,
@@ -2221,11 +2221,11 @@ function updateEntry() {
     return;
   }
   overlay();
-  tOver.setText('¡NUEVO PUNTAJE ALTO!').setVisible(true);
-  tBoard.setText('INGRESA TUS INICIALES   ' + String(st.pts).padStart(6, '0')).setY(172).setVisible(true);
+  tOver.setText('NEW HIGH SCORE!').setVisible(true);
+  tBoard.setText('ENTER YOUR INITIALS   ' + String(st.pts).padStart(6, '0')).setY(172).setVisible(true);
   // Lo escrito, con guiones en las letras que faltan; el próximo guion late.
   tEnt.setText([0, 1, 2].map((i) => e.n[i] || (i == e.n.length && (st.dead * 3) & 1 ? ' ' : '_')).join('  ')).setVisible(true);
-  tHint.setText('JOYSTICK  ELEGIR    [1]  ESCRIBIR    [2]  BORRAR    START  LISTO').setVisible(true);
+  tHint.setText('JOYSTICK  SELECT    [1]  TYPE    [2]  DELETE    START  DONE').setVisible(true);
   for (const t of tKeys) t.setVisible(true);
   // Teclas: fondo tenue; la elegida, recuadro magenta que late.
   const k = 0.6 + 0.4 * abs(sin(st.dead * 5));
@@ -2252,7 +2252,7 @@ function updateEntry() {
 //   aviso y embiste; al terminar la embestida suelta un anillo de proyectiles.
 // boss: {k, x, y, hp, mx (vida máxima), a (giro), m (rumbo), t (reloj de ataque), c (paso),
 //        hf (destello), hc (espera entre golpes al jugador), d (muriendo), s (segmentos del titán)}
-const BN = ['FORTALEZA', 'NÚCLEO', 'TITÁN'];
+const BN = ['FORTRESS', 'CORE', 'TITAN'];
 const BC = [ORA, SPC, GRN];
 const BR2 = [62, 30, 26]; // radio que recibe daño
 
@@ -2268,7 +2268,7 @@ function spawnBoss() {
   const k = st.bn % 3, a = random() * 6.28, hp = 45 + st.bn * 25;
   boss = { k, x: pl.x + cos(a) * 520, y: pl.y + sin(a) * 520, hp, mx: hp, a: 0, m: a + PI, t: 2, c: 0, hf: 0, hc: 0, d: 0 };
   if (k == 2) boss.s = Array.from({ length: 16 }, () => ({ x: boss.x, y: boss.y }));
-  banner('¡JEFE!', BN[k], BC[k]);
+  banner('BOSS!', BN[k], BC[k]);
   zp = 0.08;
   sfx.warn();
 }
@@ -2424,8 +2424,8 @@ function bossDown() {
   st.xp = 0;
   st.lvl++;
   sfx.lvl();
-  const news = { 2: '¡LLEGAN FORMACIONES!', 5: '¡MINAS EN TRIÁNGULO!', 15: 'DIFICULTAD MÁXIMA' };
-  banner('NIVEL ' + st.lvl, news[st.lvl] || (st.lvl < 15 ? 'MÁS RÁPIDO  ·  MÁS ENEMIGOS' : '¡SIGUE VIVO!'), HC);
+  const news = { 2: 'FORMATIONS INCOMING!', 5: 'MINE TRIANGLES!', 15: 'MAX DIFFICULTY' };
+  banner('LEVEL ' + st.lvl, news[st.lvl] || (st.lvl < 15 ? 'FASTER  ·  MORE ENEMIES' : 'STAY ALIVE!'), HC);
   st.sw = 1.8;
   zp = 0.12;
 }
@@ -2523,7 +2523,7 @@ function drawBossHud() {
 // siempre suelta uno). Duran 12 s y parpadean los últimos 3.
 // 0 ESCUDO (barra llena), 1 BOMBA (destruye lo cercano), 2 IMÁN (8 s). No hay objetos que
 // devuelvan corazones: las vidas perdidas no se recuperan.
-const IN = ['ESCUDO', '¡BOMBA!', 'IMÁN'];
+const IN = ['SHIELD', 'BOMB!', 'MAGNET'];
 const IC = [HC, YEL, OB];
 
 function spawnItem(x, y) {
@@ -2630,7 +2630,7 @@ function updateBanana(s) {
       ban = null;
       st.pt = PT;
       sfx.lvl();
-      banner('¡MODO PLATANUS!', 'INVENCIBLE  ·  DESTRUYE TODO  ·  x3 AL JEFE', YEL);
+      banner('PLATANUS MODE!', 'INVINCIBLE  ·  DESTROY EVERYTHING  ·  x3 BOSS DAMAGE', YEL);
     } else if (b.t > 5) ban = null;
   }
   if ((st.pt -= s) > 0) {
